@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'api-dev'
+    static_configs:
+      - targets: ['api-dev:8000']
+    metrics_path: /metrics
+    scrape_interval: 5s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'api-dev'
+      - source_labels: [__address__]
+        target_label: environment
+        replacement: 'development'
+
+  - job_name: 'triton-dev'
+    static_configs:
+      - targets: ['triton-dev:8002']
+    metrics_path: /metrics
+    scrape_interval: 5s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'triton-dev'
+      - source_labels: [__address__]
+        target_label: environment
+        replacement: 'development'
+
+  - job_name: 'dcgm-exporter'
+    static_configs:
+      - targets: ['dcgm-exporter:9400']
+    scrape_interval: 5s

@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # SAP HANA Cloud Connector API
+  sap-api:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.sap
+    image: finsight/owl-sap-connector:latest
+    container_name: owl-sap-connector
+    ports:
+      - "8010:8000"
+    environment:
+      - SAP_CREDENTIALS_DIR=/app/credentials
+      - SAP_LOGGING_LEVEL=INFO
+      - SAP_LOGGING_FORMAT=json
+      - SAP_CONNECTION_POOL_SIZE=5
+      - SAP_MAX_OVERFLOW=10
+      - SAP_CONNECTION_TIMEOUT=30
+      - SAP_COMMAND_TIMEOUT=300
+      - SAP_ENABLE_COMPRESSION=true
+      - SAP_COMPRESSION_THRESHOLD=10240
+      - SAP_ENABLE_METRICS=true
+      - SAP_STATEMENT_CACHE_SIZE=50
+      - SAP_MAX_CONNECTION_AGE=3600
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    volumes:
+      - ../app/logs:/app/logs
+      - ../app/cache:/app/cache
+      - ../app/data:/app/data
+      - sap_credentials:/app/credentials
+    restart: unless-stopped
+    networks:
+      - owl-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # SAP HANA Cloud Connector Proxy (for direct connections to SAP)
+  sap-proxy:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.sap
+    image: finsight/owl-sap-proxy:latest
+    container_name: owl-sap-proxy
+    ports:
+      - "8011:8000"
+    command: ["python", "proxy.py"]
+    environment:
+      - SAP_CREDENTIALS_DIR=/app/credentials
+      - SAP_PROXY_PORT=8000
+      - SAP_PROXY_MAX_CONNECTIONS=100
+    volumes:
+      - ../app/logs:/app/logs
+      - sap_credentials:/app/credentials
+    restart: unless-stopped
+    networks:
+      - owl-network
+    depends_on:
+      - sap-api
+
+  # Prometheus metrics for SAP connector
+  prometheus-sap:
+    image: prom/prometheus:v2.43.0
+    container_name: owl-prometheus-sap
+    ports:
+      - "9091:9090"
+    volumes:
+      - ../deployment/prometheus-sap.yml:/etc/prometheus/prometheus.yml
+      - prometheus_sap_data:/prometheus
+    restart: unless-stopped
+    networks:
+      - owl-network
+
+  # Grafana dashboard for SAP metrics
+  grafana-sap:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana-sap
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ../deployment/grafana/sap/provisioning:/etc/grafana/provisioning
+      - ../deployment/grafana/sap/dashboards:/var/lib/grafana/dashboards
+      - grafana_sap_data:/var/lib/grafana
+    depends_on:
+      - prometheus-sap
+    restart: unless-stopped
+    networks:
+      - owl-network
+
+  # Redis for caching and task management
+  redis:
+    image: redis:7.0-alpine
+    container_name: owl-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - owl-network
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redispassword}"]
+
+networks:
+  owl-network:
+    driver: bridge
+
+volumes:
+  sap_credentials:
+    driver: local
+  prometheus_sap_data:
+    driver: local
+  grafana_sap_data:
+    driver: local
+  redis_data:
+    driver: local

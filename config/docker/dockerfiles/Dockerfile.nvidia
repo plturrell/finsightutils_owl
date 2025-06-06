@@ -1,0 +1,43 @@
+FROM nvcr.io/nvidia/pytorch:23.04-py3
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    python3-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements file
+COPY app/requirements.txt /app/requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    # Install additional dependencies for OWL conversion with GPU acceleration
+    pip install --no-cache-dir owlready2 rdflib psutil fastapi uvicorn cupy-cuda12x 
+
+# Copy application code
+COPY app/ /app/
+
+# Create directory for OWL output
+RUN mkdir -p /app/results
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV OUTPUT_DIR=/app/results
+ENV PORT=8000
+ENV USE_GPU=true
+ENV CUDA_VISIBLE_DEVICES=0
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+# Run the application with uvicorn for better performance
+CMD ["uvicorn", "sap_owl_api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

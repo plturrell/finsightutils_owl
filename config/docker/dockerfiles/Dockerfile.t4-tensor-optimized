@@ -1,0 +1,216 @@
+# Base image from NVIDIA with PyTorch optimized for tensor core operations
+FROM nvcr.io/nvidia/pytorch:23.10-py3
+
+WORKDIR /app
+
+# Set environment variables for optimal T4 GPU tensor core usage
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    CUDA_DEVICE_ORDER=PCI_BUS_ID \
+    # Enable tensor cores for mixed precision training/inference
+    NVIDIA_TF32_OVERRIDE=1 \
+    # cuDNN settings for optimized tensor core operations
+    CUDNN_FRONTEND_ENABLE_TENSOR_CORE_MATH_FP32=1 \
+    CUDNN_FRONTEND_ENABLE_BACKWARD_CONVOLUTION_FP16=1 \
+    CUDNN_FRONTEND_ENABLE_BACKWARD_CONVOLUTION_FP32=1 \
+    # Enable cuDNN v8 API for improved tensor core performance
+    TORCH_CUDNN_V8_API_ENABLED=1 \
+    # JIT fusion optimization
+    PYTORCH_JIT=1 \
+    # Memory settings optimized for T4 tensor core operations
+    PYTORCH_CUDA_ALLOC_CONF="max_split_size_mb:128" \
+    # Python settings
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    OMP_NUM_THREADS=1 \
+    # Set default logging level
+    LOG_LEVEL=INFO
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    git \
+    curl \
+    htop \
+    nvtop \
+    tmux \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for Python package management
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install NVIDIA optimized libraries specifically for tensor core operations
+RUN pip install --no-cache-dir \
+    nvidia-ml-py3 \
+    cupy-cuda12x \
+    # NVIDIA Apex for mixed precision (critical for tensor core operations)
+    apex \
+    # SAP HANA connector dependencies
+    pyhdb \
+    sqlalchemy \
+    graphql-core \
+    fastapi \
+    uvicorn \
+    # Monitoring and observability
+    prometheus-client \
+    opentelemetry-api \
+    opentelemetry-sdk \
+    opentelemetry-exporter-prometheus
+
+# Set up app directory structure
+RUN mkdir -p /app/logs /app/data /app/cache /app/results /app/uploads /app/models /app/credentials
+
+# Copy project files
+COPY pyproject.toml README.md /app/
+COPY src /app/src/
+
+# Copy application code and configuration
+COPY app /app/app/
+
+# Install dependencies
+COPY app/requirements.txt /app/
+RUN uv sync --all-groups --all-extras
+
+# Copy T4 tensor core optimization script
+COPY deployment/t4_tensor_core_optimizer.py /app/t4_tensor_core_optimizer.py
+RUN chmod +x /app/t4_tensor_core_optimizer.py
+
+# Copy and make entrypoint script executable
+COPY deployment/t4_tensor_core_entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Create a script to check tensor core utilization
+RUN echo '#!/bin/bash\n\
+# This script checks tensor core utilization\n\
+python -c "\
+import torch;\
+import time;\
+\
+print(\"GPU: \", torch.cuda.get_device_name(0));\
+print(\"CUDA Version: \", torch.version.cuda);\
+print(\"PyTorch Version: \", torch.__version__);\
+\
+if hasattr(torch.backends.cuda, \"matmul\") and hasattr(torch.backends.cuda.matmul, \"allow_tf32\"):\
+    print(\"TF32 for matrix multiplications: \", torch.backends.cuda.matmul.allow_tf32);\
+\
+if hasattr(torch.backends.cudnn, \"allow_tf32\"):\
+    print(\"TF32 for cuDNN: \", torch.backends.cudnn.allow_tf32);\
+\
+print(\"cuDNN Benchmark: \", torch.backends.cudnn.benchmark);\
+\
+print(\"\nRunning tensor core utilization test...\");\
+\
+# Create matrices that align with tensor core requirements\n\
+m, n, k = 16 * 32, 16 * 32, 16 * 32;\
+\
+# Create random matrices\n\
+a = torch.randn(m, k, dtype=torch.float32, device=\"cuda\");\
+b = torch.randn(k, n, dtype=torch.float32, device=\"cuda\");\
+\
+# Warmup\n\
+for _ in range(5):\
+    c = torch.matmul(a, b);\
+\
+torch.cuda.synchronize();\
+\
+# Benchmark with tensor cores disabled\n\
+if hasattr(torch.backends.cuda, \"matmul\"):\
+    tensor_cores_old = torch.backends.cuda.matmul.allow_tf32;\
+    cuDNN_old = torch.backends.cudnn.allow_tf32;\
+    \
+    torch.backends.cuda.matmul.allow_tf32 = False;\
+    torch.backends.cudnn.allow_tf32 = False;\
+    \
+    start = time.time();\
+    \
+    for _ in range(100):\
+        c = torch.matmul(a, b);\
+    \
+    torch.cuda.synchronize();\
+    standard_time = time.time() - start;\
+    \
+    # Benchmark with tensor cores enabled\n\
+    torch.backends.cuda.matmul.allow_tf32 = True;\
+    torch.backends.cudnn.allow_tf32 = True;\
+    \
+    start = time.time();\
+    \
+    for _ in range(100):\
+        c = torch.matmul(a, b);\
+    \
+    torch.cuda.synchronize();\
+    tensor_core_time = time.time() - start;\
+    \
+    speedup = (standard_time / tensor_core_time - 1) * 100;\
+    \
+    print(f\"Standard time: {standard_time:.6f}s\");\
+    print(f\"Tensor core time: {tensor_core_time:.6f}s\");\
+    print(f\"Speedup: {speedup:.2f}%\");\
+    \
+    # Restore original settings\n\
+    torch.backends.cuda.matmul.allow_tf32 = tensor_cores_old;\
+    torch.backends.cudnn.allow_tf32 = cuDNN_old;\
+else:\
+    print(\"TF32 settings not available in this PyTorch version\");\
+"' > /app/check_tensor_cores.sh \
+    && chmod +x /app/check_tensor_cores.sh
+
+# Create a script to optimize PyTorch for tensor cores at runtime
+RUN echo '#!/bin/bash\n\
+# Run this script to optimize PyTorch for tensor cores\n\
+python -c "\
+import torch;\
+import os;\
+\
+print(\"Configuring PyTorch for optimal tensor core utilization on T4 GPU...\");\
+\
+# Set tensor core settings\n\
+if hasattr(torch.backends.cuda, \"matmul\") and hasattr(torch.backends.cuda.matmul, \"allow_tf32\"):\
+    torch.backends.cuda.matmul.allow_tf32 = True;\
+    print(\"Enabled TF32 for matrix multiplications\");\
+\
+if hasattr(torch.backends.cudnn, \"allow_tf32\"):\
+    torch.backends.cudnn.allow_tf32 = True;\
+    print(\"Enabled TF32 for cuDNN\");\
+\
+# Set cuDNN benchmark\n\
+torch.backends.cudnn.benchmark = True;\
+print(\"Enabled cuDNN benchmark mode\");\
+\
+# Set environment variables\n\
+os.environ[\"NVIDIA_TF32_OVERRIDE\"] = \"1\";\
+os.environ[\"CUDNN_FRONTEND_ENABLE_TENSOR_CORE_MATH_FP32\"] = \"1\";\
+os.environ[\"PYTORCH_CUDA_ALLOC_CONF\"] = \"max_split_size_mb:128\";\
+\
+print(\"Environment variables set for tensor core optimization\");\
+\
+# Verify settings\n\
+print(\"\nTensor core settings:\");\
+if hasattr(torch.backends.cuda, \"matmul\") and hasattr(torch.backends.cuda.matmul, \"allow_tf32\"):\
+    print(f\"TF32 for matrix multiplications: {torch.backends.cuda.matmul.allow_tf32}\");\
+\
+if hasattr(torch.backends.cudnn, \"allow_tf32\"):\
+    print(f\"TF32 for cuDNN: {torch.backends.cudnn.allow_tf32}\");\
+\
+print(f\"cuDNN benchmark mode: {torch.backends.cudnn.benchmark}\");\
+\
+print(\"\nOptimization complete!\");\
+"' > /app/optimize_pytorch_tensor_cores.sh \
+    && chmod +x /app/optimize_pytorch_tensor_cores.sh
+
+# Expose the API port
+EXPOSE 8000
+
+# Expose Prometheus metrics port
+EXPOSE 9090
+
+# Health check to verify tensor core availability
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import torch; print('OK' if torch.cuda.is_available() and (not hasattr(torch.backends.cuda, 'matmul') or torch.backends.cuda.matmul.allow_tf32) else 'FAIL')" | grep -q "OK"
+
+# Set the entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default command
+CMD ["python", "-m", "app.main"]

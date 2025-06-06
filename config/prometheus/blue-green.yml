@@ -1,0 +1,75 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Blue deployment targets
+  - job_name: 'api-blue'
+    static_configs:
+      - targets: ['api-blue:8000']
+    metrics_path: /metrics
+    scrape_interval: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'api-blue'
+      - source_labels: [__address__]
+        target_label: deployment
+        replacement: 'blue'
+
+  - job_name: 'triton-blue'
+    static_configs:
+      - targets: ['triton-blue:8002']
+    metrics_path: /metrics
+    scrape_interval: 5s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'triton-blue'
+      - source_labels: [__address__]
+        target_label: deployment
+        replacement: 'blue'
+
+  # Green deployment targets
+  - job_name: 'api-green'
+    static_configs:
+      - targets: ['api-green:8000']
+    metrics_path: /metrics
+    scrape_interval: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'api-green'
+      - source_labels: [__address__]
+        target_label: deployment
+        replacement: 'green'
+
+  - job_name: 'triton-green'
+    static_configs:
+      - targets: ['triton-green:8002']
+    metrics_path: /metrics
+    scrape_interval: 5s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'triton-green'
+      - source_labels: [__address__]
+        target_label: deployment
+        replacement: 'green'
+
+  # NVIDIA DCGM Exporter for GPU metrics
+  - job_name: 'dcgm-exporter'
+    static_configs:
+      - targets: ['dcgm-exporter:9400']
+    scrape_interval: 5s
+
+  # Nginx metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: /nginx_status
+    scrape_interval: 10s

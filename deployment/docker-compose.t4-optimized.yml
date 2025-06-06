@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # SAP HANA Connector with T4 GPU Optimization
+  sap-hana-connector:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.t4-optimized
+    image: finsight/owl-sap-connector:t4-optimized
+    container_name: owl-sap-connector-t4
+    ports:
+      - "8020:8000"  # API port
+      - "8021:8001"  # Management port
+      - "9091:9090"  # Metrics port
+    environment:
+      # GPU optimization settings
+      - ENABLE_T4_OPTIMIZATION=true
+      - ENABLE_TF32=true
+      - ENABLE_AMP=true
+      - ENABLE_CUDNN_BENCHMARK=true
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=0
+      # SAP HANA connection settings
+      - SAP_HANA_HOST=${SAP_HANA_HOST:-localhost}
+      - SAP_HANA_PORT=${SAP_HANA_PORT:-30015}
+      - SAP_HANA_USER=${SAP_HANA_USER:-SYSTEM}
+      - SAP_HANA_PASSWORD=${SAP_HANA_PASSWORD:-Password1}
+      - SAP_CREDENTIALS_DIR=/app/credentials
+      # Performance settings
+      - SAP_CONNECTION_POOL_SIZE=10
+      - SAP_MAX_OVERFLOW=20
+      - SAP_CONNECTION_TIMEOUT=30
+      - SAP_COMMAND_TIMEOUT=300
+      - SAP_ENABLE_COMPRESSION=true
+      - SAP_COMPRESSION_THRESHOLD=10240
+      # GraphQL API settings
+      - GRAPHQL_ENABLE_MUTATIONS=false
+      - GRAPHQL_MAX_COMPLEXITY=100
+      - GRAPHQL_CACHE_TTL=300
+      - GRAPHQL_ENABLE_INTROSPECTION=true
+      # Logging and monitoring
+      - LOG_LEVEL=INFO
+      - ENABLE_TELEMETRY=true
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      # Application settings
+      - INITIALIZE_APP=true
+      - WAIT_FOR_HANA=true
+      - USE_GPU=true
+    volumes:
+      - ../app/logs:/app/logs
+      - ../app/cache:/app/cache
+      - ../app/data:/app/data
+      - ../app/results:/app/results
+      - sap_credentials:/app/credentials
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              # Request T4-specific capabilities
+              capabilities: [gpu, compute, utility, graphics]
+              count: 1
+  
+  # Schema Explorer Web UI
+  schema-explorer:
+    image: nginx:alpine
+    container_name: owl-schema-explorer
+    ports:
+      - "8022:80"
+    volumes:
+      - ../app/templates:/usr/share/nginx/html
+      - ../app/static:/usr/share/nginx/html/static
+    depends_on:
+      - sap-hana-connector
+    restart: unless-stopped
+  
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    container_name: owl-prometheus-t4
+    ports:
+      - "9092:9090"
+    volumes:
+      - ./prometheus-nvidia.yml:/etc/prometheus/prometheus.yml
+      - prometheus_t4_data:/prometheus
+    restart: unless-stopped
+    depends_on:
+      - sap-hana-connector
+  
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana-t4
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_t4_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+  
+  # NVIDIA DCGM Exporter for detailed GPU metrics
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    container_name: owl-dcgm-t4
+    ports:
+      - "9401:9400"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+  
+  # Redis for caching and task management
+  redis:
+    image: redis:7.0-alpine
+    container_name: owl-redis-t4
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_t4_data:/data
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redispassword}"]
+
+volumes:
+  sap_credentials:
+    driver: local
+  prometheus_t4_data:
+    driver: local
+  grafana_t4_data:
+    driver: local
+  redis_t4_data:
+    driver: local

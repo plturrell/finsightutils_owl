@@ -1,0 +1,61 @@
+version: '3.8'
+
+# Base Docker Compose configuration for OWL
+# This contains the shared service definitions used by all deployment strategies
+
+services:
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    container_name: owl-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+    networks:
+      - owl-network
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - owl-network
+
+  # NVIDIA DCGM Exporter for GPU metrics
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    container_name: owl-dcgm-exporter
+    ports:
+      - "9400:9400"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+    networks:
+      - owl-network
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  owl-network:
+    driver: bridge

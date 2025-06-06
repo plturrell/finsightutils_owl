@@ -1,0 +1,160 @@
+version: '3.8'
+
+# Development Docker Compose configuration for OWL
+# Includes hot-reloading and development tools
+
+services:
+  # FastAPI application in development mode
+  api-dev:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile.api
+      args:
+        - ENVIRONMENT=development
+    image: finsight/owl-api:dev
+    container_name: owl-api-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - LAYOUT_MODEL_URL=triton-dev:8000/v2/models/nv-layoutlm-financial
+      - TABLE_MODEL_URL=triton-dev:8000/v2/models/nv-table-extraction
+      - NER_MODEL_URL=triton-dev:8000/v2/models/nv-financial-ner
+      - USE_GPU=true
+      - BASE_URI=http://finsight.dev/kg/
+      - INCLUDE_PROVENANCE=true
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ../../app:/app
+      - ../../data:/app/data
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    depends_on:
+      - triton-dev
+    restart: unless-stopped
+    networks:
+      - owl-dev-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: all
+              
+  # SAP OWL Converter Service in development mode
+  owl-converter-dev:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile.owl
+      args:
+        - ENVIRONMENT=development
+    image: finsight/owl-converter:dev
+    container_name: owl-converter-dev
+    ports:
+      - "8004:8000"
+    environment:
+      - BASE_URI=http://finsight.dev/ontology/sap/
+      - INFERENCE_LEVEL=standard
+      - OUTPUT_DIR=/app/results
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ../../app:/app
+      - owl_results_dev:/app/results
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    restart: unless-stopped
+    networks:
+      - owl-dev-network
+
+  # Triton Inference Server in development mode
+  triton-dev:
+    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    container_name: owl-triton-dev
+    ports:
+      - "8001:8000"
+      - "8002:8001"
+      - "8003:8002"
+    environment:
+      - LD_LIBRARY_PATH=/opt/tritonserver/lib
+    volumes:
+      - ../../nvidia_triton/model_repository:/models
+    command: ["tritonserver", "--model-repository=/models", "--strict-model-config=false", "--log-verbose=1", "--model-control-mode=explicit"]
+    restart: unless-stopped
+    networks:
+      - owl-dev-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: all
+
+  # Frontend development server
+  frontend-dev:
+    build:
+      context: ../../owl-frontend
+      dockerfile: Dockerfile.dev
+    image: finsight/owl-frontend:dev
+    container_name: owl-frontend-dev
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ../../owl-frontend:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev"]
+    restart: unless-stopped
+    networks:
+      - owl-dev-network
+
+  # Redis for caching in development
+  redis-dev:
+    image: redis:7.0-alpine
+    container_name: owl-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    networks:
+      - owl-dev-network
+
+  # Include monitoring services from base configuration
+  prometheus:
+    extends:
+      file: docker-compose.base.yml
+      service: prometheus
+    volumes:
+      - ../prometheus/dev.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    container_name: owl-prometheus-dev
+
+  grafana:
+    extends:
+      file: docker-compose.base.yml
+      service: grafana
+    container_name: owl-grafana-dev
+
+  dcgm-exporter:
+    extends:
+      file: docker-compose.base.yml
+      service: dcgm-exporter
+    container_name: owl-dcgm-exporter-dev
+
+volumes:
+  owl_results_dev:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  owl-dev-network:
+    driver: bridge

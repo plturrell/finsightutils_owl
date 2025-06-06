@@ -1,0 +1,116 @@
+version: '3.8'
+
+# Standard Docker Compose configuration for OWL
+# Extends the base configuration with standard deployment services
+
+services:
+  # FastAPI application
+  api:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile.api
+    image: finsight/owl-api:latest
+    container_name: owl-api
+    ports:
+      - "8000:8000"
+    environment:
+      - LAYOUT_MODEL_URL=triton:8000/v2/models/nv-layoutlm-financial
+      - TABLE_MODEL_URL=triton:8000/v2/models/nv-table-extraction
+      - NER_MODEL_URL=triton:8000/v2/models/nv-financial-ner
+      - USE_GPU=true
+      - BASE_URI=http://finsight.dev/kg/
+      - INCLUDE_PROVENANCE=true
+    volumes:
+      - ../../data:/app/data
+    depends_on:
+      - triton
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - owl-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+              
+  # SAP OWL Converter Service
+  owl-converter:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile.owl
+    image: finsight/owl-converter:latest
+    container_name: owl-converter
+    ports:
+      - "8004:8000"
+    environment:
+      - BASE_URI=http://finsight.dev/ontology/sap/
+      - INFERENCE_LEVEL=standard
+      - OUTPUT_DIR=/app/results
+    volumes:
+      - owl_results:/app/results
+    restart: unless-stopped
+    networks:
+      - owl-network
+
+  # Triton Inference Server
+  triton:
+    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    container_name: owl-triton
+    ports:
+      - "8001:8000"
+      - "8002:8001"
+      - "8003:8002"
+    environment:
+      - LD_LIBRARY_PATH=/opt/tritonserver/lib
+    volumes:
+      - ../../nvidia_triton/model_repository:/models
+    command: ["tritonserver", "--model-repository=/models", "--strict-model-config=false", "--log-verbose=1"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - owl-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+
+  # Include monitoring services from base configuration
+  prometheus:
+    extends:
+      file: docker-compose.base.yml
+      service: prometheus
+
+  grafana:
+    extends:
+      file: docker-compose.base.yml
+      service: grafana
+
+  dcgm-exporter:
+    extends:
+      file: docker-compose.base.yml
+      service: dcgm-exporter
+
+volumes:
+  owl_results:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  owl-network:
+    driver: bridge

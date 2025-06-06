@@ -1,0 +1,115 @@
+# Base image from NVIDIA with PyTorch optimized for T4 GPUs
+FROM nvcr.io/nvidia/pytorch:23.10-py3
+
+WORKDIR /app
+
+# Set environment variables for optimal T4 GPU usage
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    CUDA_DEVICE_ORDER=PCI_BUS_ID \
+    # Enable tensor cores for mixed precision training/inference
+    NVIDIA_TF32_OVERRIDE=1 \
+    # cuDNN settings for optimized performance on T4
+    CUDNN_FRONTEND_ENABLE_TENSOR_CORE_MATH_FP32=1 \
+    CUDNN_FRONTEND_ENABLE_BACKWARD_CONVOLUTION_FP16=1 \
+    CUDNN_FRONTEND_ENABLE_BACKWARD_CONVOLUTION_FP32=1 \
+    # JIT fusion optimization
+    PYTORCH_JIT=1 \
+    PYTORCH_CUDA_ALLOC_CONF="max_split_size_mb:128" \
+    # Python settings
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    OMP_NUM_THREADS=1 \
+    # Set default logging level
+    LOG_LEVEL=INFO
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    git \
+    curl \
+    htop \
+    nvtop \
+    lsof \
+    tmux \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for Python package management
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install NVIDIA optimized libraries
+RUN pip install --no-cache-dir \
+    nvidia-ml-py3 \
+    cupy-cuda12x \
+    apex \
+    # SAP HANA connector dependencies
+    pyhdb \
+    sqlalchemy \
+    graphql-core \
+    fastapi \
+    uvicorn \
+    # Monitoring and observability
+    prometheus-client \
+    opentelemetry-api \
+    opentelemetry-sdk \
+    opentelemetry-exporter-prometheus
+
+# Set up app directory structure
+RUN mkdir -p /app/logs /app/data /app/cache /app/results /app/uploads
+
+# Copy project files
+COPY pyproject.toml README.md /app/
+COPY src /app/src/
+
+# Install dependencies with uv
+COPY requirements.txt /app/
+RUN uv sync --all-groups --all-extras
+
+# Copy application code and configuration
+COPY app /app/app/
+COPY deployment/entrypoint.sh /app/entrypoint.sh
+
+# Create directory for models
+RUN mkdir -p /app/models
+
+# Make entrypoint script executable
+RUN chmod +x /app/entrypoint.sh
+
+# NVIDIA specific optimizations
+# Install NVIDIA Nsight Systems for profiling (optional, can be removed for smaller image)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    apt-transport-https \
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub | apt-key add - \
+    && echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" > /etc/apt/sources.list.d/cuda.list \
+    && apt-get update \
+    && apt-get install -y nsight-systems-2023.2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy T4 optimization script
+COPY deployment/t4_optimize.sh /app/t4_optimize.sh
+RUN chmod +x /app/t4_optimize.sh
+
+# Create a script to check GPU utilization
+RUN echo '#!/bin/bash\n\
+nvidia-smi --query-gpu=timestamp,name,pci.bus_id,driver_version,temperature.gpu,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv -l 5' > /app/monitor_gpu.sh \
+    && chmod +x /app/monitor_gpu.sh
+
+# Expose the API port
+EXPOSE 8000
+
+# Expose Prometheus metrics port
+EXPOSE 9090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+# Set the entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default command (can be overridden)
+CMD ["python", "-m", "app.main"]

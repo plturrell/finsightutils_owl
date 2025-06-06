@@ -1,0 +1,117 @@
+version: '3.8'
+
+services:
+  # FastAPI application
+  api:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.api
+    image: finsight/owl-api:latest
+    container_name: owl-api
+    ports:
+      - "8000:8000"
+    environment:
+      - LAYOUT_MODEL_URL=triton:8000/v2/models/nv-layoutlm-financial
+      - TABLE_MODEL_URL=triton:8000/v2/models/nv-table-extraction
+      - NER_MODEL_URL=triton:8000/v2/models/nv-financial-ner
+      - USE_GPU=true
+      - BASE_URI=http://finsight.dev/kg/
+      - INCLUDE_PROVENANCE=true
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      - triton
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+              
+  # SAP OWL Converter Service
+  owl-converter:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.owl
+    image: finsight/owl-converter:latest
+    container_name: owl-converter
+    ports:
+      - "8004:8000"
+    environment:
+      - BASE_URI=http://finsight.dev/ontology/sap/
+      - INFERENCE_LEVEL=standard
+      - OUTPUT_DIR=/app/results
+    volumes:
+      - owl_results:/app/results
+    restart: unless-stopped
+
+  # Triton Inference Server
+  triton:
+    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    container_name: owl-triton
+    ports:
+      - "8001:8000"
+      - "8002:8001"
+      - "8003:8002"
+    environment:
+      - LD_LIBRARY_PATH=/opt/tritonserver/lib
+    volumes:
+      - ../nvidia_triton/model_repository:/models
+    command: ["tritonserver", "--model-repository=/models", "--strict-model-config=false", "--log-verbose=1"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    container_name: owl-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../deployment/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ../deployment/grafana/provisioning:/etc/grafana/provisioning
+      - ../deployment/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # NVIDIA DCGM Exporter for GPU metrics
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    container_name: owl-dcgm-exporter
+    ports:
+      - "9400:9400"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+
+volumes:
+  prometheus_data:
+  grafana_data:

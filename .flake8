@@ -1,0 +1,8 @@
+[flake8]
+max-line-length = 100
+exclude = .git,__pycache__,build,dist,venv,env
+ignore = E203,W503
+per-file-ignores =
+    # Allow function definitions, class definitions, etc. to be imported in __init__.py
+    __init__.py:F401,F403
+max-complexity = 10

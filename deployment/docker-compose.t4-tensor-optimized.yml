@@ -1,0 +1,190 @@
+version: '3.8'
+
+services:
+  # SAP HANA Connector with T4 Tensor Core Optimization
+  sap-hana-connector:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.t4-tensor-optimized
+    image: finsight/owl-sap-connector:t4-tensor-optimized
+    container_name: owl-sap-connector-t4-tensor
+    ports:
+      - "8030:8000"  # API port
+      - "8031:8001"  # Management port
+      - "9093:9090"  # Metrics port
+    environment:
+      # GPU optimization settings
+      - ENABLE_T4_OPTIMIZATION=true
+      - ENABLE_TF32=true
+      - ENABLE_AMP=true
+      - ENABLE_CUDNN_BENCHMARK=true
+      - NVIDIA_TF32_OVERRIDE=1
+      - CUDNN_FRONTEND_ENABLE_TENSOR_CORE_MATH_FP32=1
+      - CUDNN_FRONTEND_ENABLE_BACKWARD_CONVOLUTION_FP16=1
+      - CUDNN_FRONTEND_ENABLE_BACKWARD_CONVOLUTION_FP32=1
+      - PYTORCH_JIT=1
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+      - TORCH_CUDNN_V8_API_ENABLED=1
+      # Matrix size configuration for optimal tensor core utilization
+      - MATRIX_M_MULTIPLIER=8
+      - MATRIX_N_MULTIPLIER=8
+      - MATRIX_K_MULTIPLIER=8
+      - BATCH_SIZE_MULTIPLIER=8
+      # SAP HANA connection settings
+      - SAP_HANA_HOST=${SAP_HANA_HOST:-localhost}
+      - SAP_HANA_PORT=${SAP_HANA_PORT:-30015}
+      - SAP_HANA_USER=${SAP_HANA_USER:-SYSTEM}
+      - SAP_HANA_PASSWORD=${SAP_HANA_PASSWORD:-Password1}
+      - SAP_CREDENTIALS_DIR=/app/credentials
+      # Performance settings
+      - SAP_CONNECTION_POOL_SIZE=20
+      - SAP_MAX_OVERFLOW=30
+      - SAP_CONNECTION_TIMEOUT=30
+      - SAP_COMMAND_TIMEOUT=300
+      - SAP_ENABLE_COMPRESSION=true
+      - SAP_COMPRESSION_THRESHOLD=10240
+      # GraphQL API settings
+      - GRAPHQL_ENABLE_MUTATIONS=false
+      - GRAPHQL_MAX_COMPLEXITY=100
+      - GRAPHQL_CACHE_TTL=300
+      - GRAPHQL_ENABLE_INTROSPECTION=true
+      # Logging and monitoring
+      - LOG_LEVEL=INFO
+      - ENABLE_TELEMETRY=true
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      # Application settings
+      - INITIALIZE_APP=true
+      - WAIT_FOR_HANA=true
+      - USE_GPU=true
+    volumes:
+      - ../app/logs:/app/logs
+      - ../app/cache:/app/cache
+      - ../app/data:/app/data
+      - ../app/results:/app/results
+      - sap_credentials:/app/credentials
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import torch; print('healthy' if torch.cuda.is_available() else 'unhealthy')", "|", "grep", "-q", "healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              # Request capabilities specifically for tensor core operations
+              capabilities: [gpu, compute, utility]
+              count: 1
+              options:
+                # Request T4-specific options
+                # These will be ignored on other GPUs
+                nvidia.driver.nvidia-application-clocks-enabled: 1
+                nvidia.driver.nvidia-powerlimit-enabled: 1
+                nvidia.driver.nvidia-cuda-compute-capability: "7.5"
+  
+  # Tensor Core Profiler Service
+  tensor-profiler:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.t4-tensor-optimized
+    image: finsight/owl-tensor-profiler:latest
+    container_name: owl-tensor-profiler
+    ports:
+      - "8032:8000"  # API port
+    command: ["python", "-m", "app.src.core.t4_gpu_optimizer"]
+    environment:
+      - ENABLE_T4_OPTIMIZATION=true
+      - NVIDIA_VISIBLE_DEVICES=0
+    volumes:
+      - ../app/logs:/app/logs
+    restart: "no"  # Only run when explicitly started
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+  
+  # Schema Explorer Web UI with Tensor Core Analysis
+  schema-explorer:
+    image: nginx:alpine
+    container_name: owl-tensor-schema-explorer
+    ports:
+      - "8033:80"
+    volumes:
+      - ../app/templates:/usr/share/nginx/html
+      - ../app/static:/usr/share/nginx/html/static
+    depends_on:
+      - sap-hana-connector
+    restart: unless-stopped
+  
+  # Prometheus for monitoring tensor core utilization
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    container_name: owl-prometheus-tensor
+    ports:
+      - "9093:9090"
+    volumes:
+      - ./prometheus-nvidia.yml:/etc/prometheus/prometheus.yml
+      - prometheus_tensor_data:/prometheus
+    restart: unless-stopped
+    depends_on:
+      - sap-hana-connector
+      - dcgm-exporter
+  
+  # Grafana with tensor core utilization dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana-tensor
+    ports:
+      - "3003:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel,grafana-clock-panel
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_tensor_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+  
+  # NVIDIA DCGM Exporter with enhanced tensor core metrics
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    container_name: owl-dcgm-tensor
+    ports:
+      - "9402:9400"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+  
+  # Redis for caching with optimized settings for ML workloads
+  redis:
+    image: redis:7.0-alpine
+    container_name: owl-redis-tensor
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_tensor_data:/data
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "4gb", "--maxmemory-policy", "allkeys-lru", "--requirepass", "${REDIS_PASSWORD:-redispassword}"]
+
+volumes:
+  sap_credentials:
+    driver: local
+  prometheus_tensor_data:
+    driver: local
+  grafana_tensor_data:
+    driver: local
+  redis_tensor_data:
+    driver: local

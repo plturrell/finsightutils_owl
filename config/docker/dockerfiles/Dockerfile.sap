@@ -1,0 +1,61 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    git \
+    curl \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install SAP HANA HDB client (required for PyHDB or hdbcli)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    unzip \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up app directory structure
+RUN mkdir -p /app/logs /app/data /app/cache /app/uploads
+
+# Copy application files
+COPY app/requirements.txt /app/
+COPY app/src /app/src/
+COPY app/sap_hana_api.py /app/
+COPY app/main.py /app/
+COPY app/templates /app/templates/
+COPY app/static /app/static/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Add SAP-specific Python packages
+RUN pip install --no-cache-dir \
+    pyhdb \
+    sqlalchemy \
+    prometheus-client \
+    structlog \
+    python-json-logger
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV SAP_LOGGING_ENABLED=true
+ENV SAP_METRICS_ENABLED=true
+
+# Create directory for SAP credentials
+RUN mkdir -p /app/credentials
+RUN chmod 700 /app/credentials
+
+# Expose the API port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+# Run the API with the SAP module enabled
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
