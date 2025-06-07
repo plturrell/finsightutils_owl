@@ -1,0 +1,210 @@
+version: '3.8'
+
+# Multi-GPU Docker Compose configuration for OWL
+# Supports scaling across multiple NVIDIA GPUs
+# Uses MPS for concurrent multi-process GPU usage
+
+services:
+  # SAP HANA Connector with multi-GPU support
+  sap-hana-connector:
+    build:
+      context: ../..
+      dockerfile: config/docker/dockerfiles/Dockerfile.multi-gpu
+    image: finsight/owl-sap-connector:multi-gpu
+    container_name: owl-sap-connector-multigpu
+    ports:
+      - "8020:8000"  # API port
+      - "8021:8001"  # Management port
+      - "9091:9090"  # Metrics port
+    environment:
+      # Multi-GPU settings
+      - ENABLE_MULTI_GPU=true
+      - GPU_COUNT=${GPU_COUNT:-2}
+      - PRIMARY_GPU_ID=${PRIMARY_GPU_ID:-0}
+      - SECONDARY_GPU_IDS=${SECONDARY_GPU_IDS:-1}
+      - ENABLE_MPS=${ENABLE_MPS:-true}
+      # GPU optimization settings
+      - ENABLE_T4_OPTIMIZATION=true
+      - ENABLE_TF32=true
+      - ENABLE_AMP=true
+      - ENABLE_CUDNN_BENCHMARK=true
+      - NVIDIA_VISIBLE_DEVICES=all
+      # Load balancing settings
+      - LOAD_BALANCING_STRATEGY=${LOAD_BALANCING_STRATEGY:-round_robin}
+      - MEMORY_THRESHOLD=${MEMORY_THRESHOLD:-80}  # Memory threshold percentage for load balancing
+      # Continuous learning settings
+      - ENABLE_CONTINUOUS_LEARNING=${ENABLE_CONTINUOUS_LEARNING:-true}
+      - CONTINUOUS_LEARNING_STORAGE_PATH=/app/data/continuous_learning
+      - EXPLORATION_RATE=${EXPLORATION_RATE:-0.2}
+      - LEARNING_RATE=${LEARNING_RATE:-0.1}
+      - ENABLE_REINFORCEMENT_LEARNING=${ENABLE_REINFORCEMENT_LEARNING:-true}
+      # SAP HANA connection settings
+      - SAP_HANA_HOST=${SAP_HANA_HOST:-localhost}
+      - SAP_HANA_PORT=${SAP_HANA_PORT:-30015}
+      - SAP_HANA_USER=${SAP_HANA_USER:-SYSTEM}
+      - SAP_HANA_PASSWORD=${SAP_HANA_PASSWORD:-Password1}
+      - SAP_CREDENTIALS_DIR=/app/credentials
+      # Performance settings
+      - SAP_CONNECTION_POOL_SIZE=10
+      - SAP_MAX_OVERFLOW=20
+      - SAP_CONNECTION_TIMEOUT=30
+      - SAP_COMMAND_TIMEOUT=300
+      - SAP_ENABLE_COMPRESSION=true
+      - SAP_COMPRESSION_THRESHOLD=10240
+      # GraphQL API settings
+      - GRAPHQL_ENABLE_MUTATIONS=false
+      - GRAPHQL_MAX_COMPLEXITY=100
+      - GRAPHQL_CACHE_TTL=300
+      - GRAPHQL_ENABLE_INTROSPECTION=true
+      # Logging and monitoring
+      - LOG_LEVEL=INFO
+      - ENABLE_TELEMETRY=true
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      # Application settings
+      - INITIALIZE_APP=true
+      - WAIT_FOR_HANA=true
+      - USE_GPU=true
+    volumes:
+      - ../app/logs:/app/logs
+      - ../app/cache:/app/cache
+      - ../app/data:/app/data
+      - ../app/results:/app/results
+      - sap_credentials:/app/credentials
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              # Request GPU capabilities
+              capabilities: [gpu, compute, utility]
+              count: all  # Use all available GPUs
+  
+  # OWL Worker nodes for distributed processing
+  owl-worker:
+    build:
+      context: ../..
+      dockerfile: config/docker/dockerfiles/Dockerfile.multi-gpu
+    image: finsight/owl-worker:multi-gpu
+    # Allow multiple worker containers
+    deploy:
+      replicas: ${WORKER_COUNT:-2}
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu, compute]
+              count: 1  # Each worker gets one GPU
+    environment:
+      - WORKER_MODE=true
+      - WORKER_ID={{.Task.Slot}}
+      - MASTER_HOST=sap-hana-connector
+      - MASTER_PORT=8001
+      - ENABLE_T4_OPTIMIZATION=true
+      - ENABLE_TF32=true
+      - ENABLE_AMP=true
+      - USE_GPU=true
+      - LOG_LEVEL=INFO
+      # Worker monitoring settings
+      - ENABLE_METRICS=true
+      - METRICS_PORT=9090
+      - EXPOSE_WORKER_METRICS=true
+      # Pass continuous learning settings to workers
+      - ENABLE_CONTINUOUS_LEARNING=${ENABLE_CONTINUOUS_LEARNING:-true}
+      - CONTINUOUS_LEARNING_STORAGE_PATH=/app/data/continuous_learning
+    volumes:
+      - ../app/logs:/app/logs
+      - ../app/cache:/app/cache
+      - ../app/data:/app/data
+      - owl_shared_memory:/dev/shm
+    depends_on:
+      - sap-hana-connector
+    restart: unless-stopped
+  
+  # Schema Explorer Web UI
+  schema-explorer:
+    image: nginx:alpine
+    container_name: owl-schema-explorer
+    ports:
+      - "8022:80"
+    volumes:
+      - ../app/templates:/usr/share/nginx/html
+      - ../app/static:/usr/share/nginx/html/static
+    depends_on:
+      - sap-hana-connector
+    restart: unless-stopped
+  
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    container_name: owl-prometheus-multigpu
+    ports:
+      - "9092:9090"
+    volumes:
+      - ./prometheus-multigpu.yml:/etc/prometheus/prometheus.yml
+      - prometheus_multigpu_data:/prometheus
+    restart: unless-stopped
+    depends_on:
+      - sap-hana-connector
+  
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana-multigpu
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_multigpu_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+  
+  # NVIDIA DCGM Exporter for detailed GPU metrics
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    container_name: owl-dcgm-multigpu
+    ports:
+      - "9401:9400"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: all
+  
+  # Redis for caching and task management
+  redis:
+    image: redis:7.0-alpine
+    container_name: owl-redis-multigpu
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_multigpu_data:/data
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redispassword}"]
+
+volumes:
+  sap_credentials:
+    driver: local
+  prometheus_multigpu_data:
+    driver: local
+  grafana_multigpu_data:
+    driver: local
+  redis_multigpu_data:
+    driver: local
+  owl_shared_memory:
+    driver: local

@@ -1,0 +1,142 @@
+FROM nvcr.io/nvidia/cuda:12.1.0-devel-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    libpq-dev \
+    python3-dev \
+    python3-pip \
+    python3-setuptools \
+    python3-wheel \
+    nvidia-cuda-toolkit \
+    libcublas-dev \
+    libcudnn8 \
+    libcusparse-dev \
+    libcufft-dev \
+    libcurand-dev \
+    libhdf5-dev \
+    libnccl2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install NVIDIA Multi-Process Service (MPS)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cuda-mps-12-1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up MPS directories
+RUN mkdir -p /tmp/nvidia-mps
+ENV CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps
+ENV CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-mps/log
+
+# Set up working directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Install RAPIDS for multi-GPU support
+RUN pip3 install --no-cache-dir cudf-cu12 cugraph-cu12 cuml-cu12 dask-cuda
+
+# Additional libraries for multi-GPU optimization
+RUN pip3 install --no-cache-dir \
+    torch \
+    "ray[default]" \
+    nvidia-dali-cuda120 \
+    nvidia-dlprof \
+    deepspeed \
+    mpi4py
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/cache /app/data /app/results /app/credentials
+
+# Copy the application
+COPY . /app/
+
+# Setup PYTHONPATH for the application
+ENV PYTHONPATH=/app:$PYTHONPATH
+
+# Create startup script with MPS support
+RUN echo '#!/bin/bash\n\
+# Create continuous learning directory if it doesn'\''t exist\n\
+if [ "$ENABLE_CONTINUOUS_LEARNING" = "true" ]; then\n\
+  echo "Setting up continuous learning directory..."\n\
+  mkdir -p $CONTINUOUS_LEARNING_STORAGE_PATH\n\
+  chmod -R 777 $CONTINUOUS_LEARNING_STORAGE_PATH\n\
+  echo "Continuous learning directory ready"\n\
+fi\n\
+\n\
+if [ "$ENABLE_MPS" = "true" ]; then\n\
+  echo "Starting NVIDIA MPS Control Daemon..."\n\
+  nvidia-smi -i 0 -c EXCLUSIVE_PROCESS\n\
+  nvidia-cuda-mps-control -d\n\
+  echo "MPS Control Daemon started"\n\
+fi\n\
+\n\
+# Setup health check files\n\
+mkdir -p /app/health\n\
+touch /app/health/startup_in_progress\n\
+\n\
+if [ "$WORKER_MODE" = "true" ]; then\n\
+  echo "Starting OWL Worker Node $WORKER_ID..."\n\
+  \n\
+  # Start in background and save PID\n\
+  python3 -m src.aiq.owl.distributed.worker \\\n\
+    --worker-id=$WORKER_ID \\\n\
+    --master-host=$MASTER_HOST \\\n\
+    --master-port=$MASTER_PORT \\\n\
+    --enable-continuous-learning=$ENABLE_CONTINUOUS_LEARNING \\\n\
+    --enable-metrics=$ENABLE_METRICS \\\n\
+    --metrics-port=$METRICS_PORT \\\n\
+    --health-check-file=/app/health/worker_$WORKER_ID &\n\
+  \n\
+  PID=$!\n\
+  echo $PID > /app/logs/worker-$WORKER_ID.pid\n\
+  \n\
+  # Remove startup in progress flag\n\
+  rm -f /app/health/startup_in_progress\n\
+  \n\
+  # Wait for the process to finish\n\
+  wait $PID\n\
+else\n\
+  echo "Starting OWL Master Node..."\n\
+  \n\
+  # Start in background and save PID\n\
+  python3 -m src.aiq.owl.api.app \\\n\
+    --enable-continuous-learning=$ENABLE_CONTINUOUS_LEARNING \\\n\
+    --continuous-learning-path=$CONTINUOUS_LEARNING_STORAGE_PATH \\\n\
+    --exploration-rate=$EXPLORATION_RATE \\\n\
+    --learning-rate=$LEARNING_RATE \\\n\
+    --enable-reinforcement-learning=$ENABLE_REINFORCEMENT_LEARNING \\\n\
+    --health-check-file=/app/health/master &\n\
+  \n\
+  PID=$!\n\
+  echo $PID > /app/logs/master.pid\n\
+  \n\
+  # Remove startup in progress flag\n\
+  rm -f /app/health/startup_in_progress\n\
+  \n\
+  # Wait for the process to finish\n\
+  wait $PID\n\
+fi\n\
+' > /app/start.sh
+
+RUN chmod +x /app/start.sh
+
+# Expose ports
+EXPOSE 8000 8001 9090
+
+# Set healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD if [ -f /app/health/startup_in_progress ]; then exit 0; elif [ "$WORKER_MODE" = "true" ]; then [ -f /app/health/worker_$WORKER_ID ] && [ $(($(date +%s) - $(date -r /app/health/worker_$WORKER_ID +%s))) -lt 60 ] || exit 1; else curl -f http://localhost:8000/api/v1/health && curl -f http://localhost:8000/api/v1/learning/health || exit 1; fi
+
+# Run the startup script
+CMD ["/app/start.sh"]
