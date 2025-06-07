@@ -29,6 +29,36 @@ services:
         python main.py --host 0.0.0.0 --port 8000
       "
 
+  # DePlot service for chart extraction
+  deplot:
+    image: brevdev/brev-python:3.10-cuda-11.8
+    container_name: owl-deplot
+    working_dir: /app/deplot
+    ports:
+      - "8001:8001"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ./deplot:/app/deplot
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      bash -c "
+        git clone https://github.com/google-research/google-research.git &&
+        cd google-research &&
+        pip install -e 'deplot[dev]' &&
+        pip install 'git+https://github.com/google-research/pix2struct@main#egg=pix2struct[dev]' &&
+        pip install openai~=0.26.4 scipy~=1.10.0 &&
+        cd deplot &&
+        python -m pix2struct.demo --model=chart-to-table --port=8001 --host=0.0.0.0
+      "
+
   # Prometheus for monitoring
   prometheus:
     image: prom/prometheus:v2.43.0

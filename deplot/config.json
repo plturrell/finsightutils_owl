@@ -1,0 +1,30 @@
+{
+  "model_config": {
+    "chart_to_table": {
+      "model_name": "chart-to-table",
+      "description": "Converts charts to structured data tables",
+      "checkpoint": "gs://pix2struct/deplot/chart_to_table/checkpoint"
+    },
+    "chartqa": {
+      "model_name": "chartqa",
+      "description": "Answers questions about charts",
+      "checkpoint": "gs://pix2struct/deplot/chartqa/checkpoint" 
+    }
+  },
+  "api_config": {
+    "host": "0.0.0.0",
+    "port": 8001,
+    "debug": false,
+    "max_request_size": 10000000,
+    "allowed_origins": ["*"]
+  },
+  "extraction_config": {
+    "default_model": "chart_to_table",
+    "confidence_threshold": 0.7,
+    "max_table_size": 100,
+    "image_preprocessing": {
+      "resize_max_dim": 1000,
+      "normalize": true
+    }
+  }
+}
