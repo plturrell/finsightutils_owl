@@ -1,0 +1,151 @@
+name: finsightutils-owl
+description: OWL Converter for SAP HANA schemas with NVIDIA T4 GPU acceleration
+image: nvidia/cuda:12.1.0-devel-ubuntu22.04
+
+# System requirements for the instance
+instance:
+  gpu: T4
+  cpus: 4
+  memory: 16GB
+  disk: 50GB
+
+# Environment variables for the application
+env:
+  - key: USE_GPU
+    value: "true"
+  - key: ENABLE_T4_OPTIMIZATION
+    value: "true"
+  - key: USE_TF32
+    value: "true"
+  - key: NVIDIA_TF32_OVERRIDE
+    value: "1"
+  - key: CUDNN_TENSOR_OP_MATH
+    value: "1"
+  - key: BASE_URI
+    value: "http://finsight.dev/kg/"
+  - key: INCLUDE_PROVENANCE
+    value: "true"
+  - key: OUTPUT_DIR
+    value: "/workspace/results"
+  - key: PYTHONPATH
+    value: "/workspace"
+
+# Steps to set up the environment
+setup:
+  - apt-get update && apt-get install -y --no-install-recommends \
+      build-essential \
+      curl \
+      wget \
+      git \
+      python3-dev \
+      python3-pip \
+      nginx \
+      && rm -rf /var/lib/apt/lists/*
+  
+  - pip install --no-cache-dir --upgrade pip
+  - pip install --no-cache-dir -r requirements.txt
+  - pip install --no-cache-dir owlready2 rdflib psutil fastapi uvicorn cupy-cuda12x
+
+# Services to run in the background
+services:
+  # Main API service
+  api:
+    command: uvicorn app.sap_owl_api:app --host 0.0.0.0 --port 8000 --workers 4
+    port: 8000
+    env:
+      LAYOUT_MODEL_URL: "triton:8000/v2/models/nv-layoutlm-financial"
+      TABLE_MODEL_URL: "triton:8000/v2/models/nv-table-extraction"
+      NER_MODEL_URL: "triton:8000/v2/models/nv-financial-ner"
+    depends_on:
+      - triton
+  
+  # NVIDIA Triton Inference Server
+  triton:
+    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    command: >
+      bash -c "
+      chmod +x /workspace/config/scripts/t4_optimize.sh && 
+      /workspace/config/scripts/t4_optimize.sh && 
+      tritonserver --model-repository=/workspace/nvidia_triton/model_repository --strict-model-config=false --log-verbose=1
+      "
+    port: 8001
+    volumes:
+      - /workspace/nvidia_triton/model_repository:/models
+  
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    port: 9090
+    volumes:
+      - /workspace/config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    port: 3000
+    env:
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - /workspace/config/grafana/provisioning:/etc/grafana/provisioning
+      - /workspace/config/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+  
+  # NVIDIA DCGM Exporter for GPU metrics
+  dcgm:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    port: 9400
+
+# Exposed ports
+ports:
+  - port: 8000
+    description: "OWL API"
+  - port: 8001
+    description: "Triton Inference Server"
+  - port: 3000
+    description: "Grafana Dashboard"
+  - port: 9090
+    description: "Prometheus"
+  - port: 9400
+    description: "DCGM Exporter"
+
+# Health checks for the application
+health:
+  - path: "/health"
+    port: 8000
+    initialDelaySeconds: 40
+    periodSeconds: 30
+    timeoutSeconds: 10
+    successThreshold: 1
+    failureThreshold: 3
+  
+  - path: "/v2/health/ready"
+    port: 8001
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+
+# Documentation links
+docs:
+  - title: "OWL Converter Documentation"
+    url: "https://github.com/plturrell/finsightutils_owl/blob/main/README.md"
+  - title: "T4 GPU Optimization Guide"
+    url: "https://github.com/plturrell/finsightutils_owl/blob/main/docs/deployment/T4_GPU_OPTIMIZATION.md"
+  - title: "SAP Integration Guide"
+    url: "https://github.com/plturrell/finsightutils_owl/blob/main/docs/sap_integration/SAP_INTEGRATION_README.md"
+
+# Additional metadata
+metadata:
+  version: "1.0.0"
+  author: "FinSight Development Team"
+  contact: "dev@finsight.ai"
+  tags:
+    - owl
+    - sap
+    - nvidia
+    - t4
+    - gpu
+    - acceleration
