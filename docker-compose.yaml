@@ -1,0 +1,66 @@
+version: '3.8'
+
+# Simplified Multi-GPU Docker Compose for OWL
+# This version is intended for direct deployment
+
+services:
+  # Main service with GPU support
+  owl-service:
+    image: nvcr.io/nvidia/cuda:12.1.0-devel-ubuntu22.04
+    container_name: owl-service
+    ports:
+      - "8020:8000"  # API port
+      - "8021:8001"  # Management port
+      - "9090:9090"  # Metrics port
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - ENABLE_MULTI_GPU=true
+      - ENABLE_MPS=true
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    command: >
+      bash -c "mkdir -p /app/logs /app/data &&
+               nvidia-smi > /app/logs/gpu-info.log &&
+               echo 'OWL service started' > /app/logs/service.log &&
+               sleep infinity"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu, compute]
+              count: all
+
+  # NVIDIA DCGM Exporter for GPU metrics
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    container_name: owl-dcgm
+    ports:
+      - "9400:9400"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: all
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  grafana_data:
+    driver: local
