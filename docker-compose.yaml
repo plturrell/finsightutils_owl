@@ -1,13 +1,16 @@
 version: '3.8'
 
-# Simplified Multi-GPU Docker Compose for OWL
-# This version is intended for direct deployment
+# OWL Multi-GPU Configuration with Continuous Learning
+# Built for production deployment with NVIDIA GPUs
 
 services:
-  # Main service with GPU support
-  owl-service:
-    image: nvcr.io/nvidia/cuda:12.1.0-devel-ubuntu22.04
-    container_name: owl-service
+  # Main OWL Service with Multi-GPU support
+  owl-master:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: owl-service:latest
+    container_name: owl-master
     ports:
       - "8020:8000"  # API port
       - "8021:8001"  # Management port
@@ -15,23 +18,58 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - ENABLE_MULTI_GPU=true
+      - PRIMARY_GPU_ID=0
       - ENABLE_MPS=true
+      - ENABLE_CONTINUOUS_LEARNING=true
+      - CONTINUOUS_LEARNING_STORAGE_PATH=/app/data/continuous_learning
+      - LOG_LEVEL=INFO
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - owl_data:/app/data
+      - owl_logs:/app/logs
+      - owl_cache:/app/cache
     restart: unless-stopped
-    command: >
-      bash -c "mkdir -p /app/logs /app/data &&
-               nvidia-smi > /app/logs/gpu-info.log &&
-               echo 'OWL service started' > /app/logs/service.log &&
-               sleep infinity"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               capabilities: [gpu, compute]
-              count: all
+              count: 1
+
+  # Worker nodes for distributed processing
+  owl-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: owl-service:latest
+    depends_on:
+      - owl-master
+    deploy:
+      replicas: 1
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu, compute]
+              count: 1
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - WORKER_MODE=true
+      - WORKER_ID=1
+      - MASTER_HOST=owl-master
+      - MASTER_PORT=8001
+      - LOG_LEVEL=INFO
+    volumes:
+      - owl_data:/app/data
+      - owl_logs:/app/logs
+      - owl_cache:/app/cache
+    restart: unless-stopped
 
   # NVIDIA DCGM Exporter for GPU metrics
   dcgm-exporter:
@@ -59,8 +97,11 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
     restart: unless-stopped
 
 volumes:
+  owl_data:
+  owl_logs:
+  owl_cache:
   grafana_data:
-    driver: local
