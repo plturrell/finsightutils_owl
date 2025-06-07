@@ -19,10 +19,10 @@ services:
     environment:
       # Multi-GPU settings
       - ENABLE_MULTI_GPU=true
-      - GPU_COUNT=${GPU_COUNT:-2}
-      - PRIMARY_GPU_ID=${PRIMARY_GPU_ID:-0}
-      - SECONDARY_GPU_IDS=${SECONDARY_GPU_IDS:-1}
-      - ENABLE_MPS=${ENABLE_MPS:-true}
+      - GPU_COUNT=2
+      - PRIMARY_GPU_ID=0
+      - SECONDARY_GPU_IDS=1
+      - ENABLE_MPS=true
       # GPU optimization settings
       - ENABLE_T4_OPTIMIZATION=true
       - ENABLE_TF32=true
@@ -30,19 +30,19 @@ services:
       - ENABLE_CUDNN_BENCHMARK=true
       - NVIDIA_VISIBLE_DEVICES=all
       # Load balancing settings
-      - LOAD_BALANCING_STRATEGY=${LOAD_BALANCING_STRATEGY:-round_robin}
-      - MEMORY_THRESHOLD=${MEMORY_THRESHOLD:-80}  # Memory threshold percentage for load balancing
+      - LOAD_BALANCING_STRATEGY=round_robin
+      - MEMORY_THRESHOLD=80  # Memory threshold percentage for load balancing
       # Continuous learning settings
-      - ENABLE_CONTINUOUS_LEARNING=${ENABLE_CONTINUOUS_LEARNING:-true}
+      - ENABLE_CONTINUOUS_LEARNING=true
       - CONTINUOUS_LEARNING_STORAGE_PATH=/app/data/continuous_learning
-      - EXPLORATION_RATE=${EXPLORATION_RATE:-0.2}
-      - LEARNING_RATE=${LEARNING_RATE:-0.1}
-      - ENABLE_REINFORCEMENT_LEARNING=${ENABLE_REINFORCEMENT_LEARNING:-true}
+      - EXPLORATION_RATE=0.2
+      - LEARNING_RATE=0.1
+      - ENABLE_REINFORCEMENT_LEARNING=true
       # SAP HANA connection settings
-      - SAP_HANA_HOST=${SAP_HANA_HOST:-localhost}
-      - SAP_HANA_PORT=${SAP_HANA_PORT:-30015}
-      - SAP_HANA_USER=${SAP_HANA_USER:-SYSTEM}
-      - SAP_HANA_PASSWORD=${SAP_HANA_PASSWORD:-Password1}
+      - SAP_HANA_HOST=localhost
+      - SAP_HANA_PORT=30015
+      - SAP_HANA_USER=SYSTEM
+      - SAP_HANA_PASSWORD=Password1
       - SAP_CREDENTIALS_DIR=/app/credentials
       # Performance settings
       - SAP_CONNECTION_POOL_SIZE=10
@@ -59,7 +59,7 @@ services:
       # Logging and monitoring
       - LOG_LEVEL=INFO
       - ENABLE_TELEMETRY=true
-      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_DSN=
       # Application settings
       - INITIALIZE_APP=true
       - WAIT_FOR_HANA=true
@@ -94,7 +94,7 @@ services:
     image: finsight/owl-worker:multi-gpu
     # Allow multiple worker containers
     deploy:
-      replicas: ${WORKER_COUNT:-2}
+      replicas: 2  # Fixed number of replicas, adjust as needed
       resources:
         reservations:
           devices:
@@ -116,7 +116,7 @@ services:
       - METRICS_PORT=9090
       - EXPOSE_WORKER_METRICS=true
       # Pass continuous learning settings to workers
-      - ENABLE_CONTINUOUS_LEARNING=${ENABLE_CONTINUOUS_LEARNING:-true}
+      - ENABLE_CONTINUOUS_LEARNING=true
       - CONTINUOUS_LEARNING_STORAGE_PATH=/app/data/continuous_learning
     volumes:
       - ../app/logs:/app/logs
@@ -195,7 +195,7 @@ services:
     volumes:
       - redis_multigpu_data:/data
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redispassword}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "redispassword"]
 
 volumes:
   sap_credentials:
