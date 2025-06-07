@@ -1,0 +1,193 @@
+/**
+ * OWL Design System - Typography
+ * 
+ * Typography styles inspired by Jony Ive's principles:
+ * - Legibility
+ * - Clarity
+ * - Hierarchy
+ * - Consistency
+ */
+
+@import './variables.css';
+
+/* Base Typography */
+body {
+  font-family: var(--owl-font-family-sans);
+  font-size: var(--owl-font-size-md);
+  line-height: var(--owl-line-height-normal);
+  color: var(--owl-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  margin-bottom: var(--owl-spacing-md);
+  line-height: var(--owl-line-height-tight);
+  font-weight: var(--owl-font-weight-semibold);
+  color: var(--owl-text-primary);
+}
+
+h1 {
+  font-size: var(--owl-font-size-4xl);
+  letter-spacing: -0.025em;
+}
+
+h2 {
+  font-size: var(--owl-font-size-3xl);
+  letter-spacing: -0.0125em;
+}
+
+h3 {
+  font-size: var(--owl-font-size-2xl);
+  letter-spacing: -0.0125em;
+}
+
+h4 {
+  font-size: var(--owl-font-size-xl);
+}
+
+h5 {
+  font-size: var(--owl-font-size-lg);
+}
+
+h6 {
+  font-size: var(--owl-font-size-md);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Paragraph */
+p {
+  margin-top: 0;
+  margin-bottom: var(--owl-spacing-md);
+}
+
+/* Links */
+a {
+  color: var(--owl-primary);
+  text-decoration: none;
+  transition: color var(--owl-transition-fast);
+}
+
+a:hover {
+  color: color-mix(in srgb, var(--owl-primary), black 20%);
+  text-decoration: underline;
+}
+
+a:focus {
+  outline: 2px solid color-mix(in srgb, var(--owl-primary), transparent 70%);
+  outline-offset: 2px;
+}
+
+/* Lists */
+ul, ol {
+  margin-top: 0;
+  margin-bottom: var(--owl-spacing-md);
+  padding-left: var(--owl-spacing-xl);
+}
+
+li {
+  margin-bottom: var(--owl-spacing-xs);
+}
+
+/* Code */
+code, pre {
+  font-family: var(--owl-font-family-mono);
+  font-size: var(--owl-font-size-sm);
+  background-color: var(--owl-surface);
+  border-radius: var(--owl-radius-sm);
+}
+
+code {
+  padding: 0.2em 0.4em;
+}
+
+pre {
+  margin-top: 0;
+  margin-bottom: var(--owl-spacing-md);
+  padding: var(--owl-spacing-md);
+  overflow-x: auto;
+  border: 1px solid var(--owl-border);
+}
+
+pre code {
+  padding: 0;
+  background-color: transparent;
+}
+
+/* Small text */
+small {
+  font-size: var(--owl-font-size-xs);
+  color: var(--owl-text-tertiary);
+}
+
+/* Text utilities */
+.text-primary {
+  color: var(--owl-primary) !important;
+}
+
+.text-secondary {
+  color: var(--owl-secondary) !important;
+}
+
+.text-accent {
+  color: var(--owl-accent) !important;
+}
+
+.text-warning {
+  color: var(--owl-warning) !important;
+}
+
+.text-error {
+  color: var(--owl-error) !important;
+}
+
+.text-muted {
+  color: var(--owl-text-tertiary) !important;
+}
+
+/* Font weight utilities */
+.font-normal {
+  font-weight: var(--owl-font-weight-normal) !important;
+}
+
+.font-medium {
+  font-weight: var(--owl-font-weight-medium) !important;
+}
+
+.font-semibold {
+  font-weight: var(--owl-font-weight-semibold) !important;
+}
+
+.font-bold {
+  font-weight: var(--owl-font-weight-bold) !important;
+}
+
+/* Text alignment */
+.text-left {
+  text-align: left !important;
+}
+
+.text-center {
+  text-align: center !important;
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+/* Text transformation */
+.text-uppercase {
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em;
+}
+
+.text-lowercase {
+  text-transform: lowercase !important;
+}
+
+.text-capitalize {
+  text-transform: capitalize !important;
+}

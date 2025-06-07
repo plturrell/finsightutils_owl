@@ -1,0 +1,96 @@
+/**
+ * OWL Design System - Variables
+ * 
+ * A unified set of design tokens inspired by Jony Ive's principles:
+ * - Simplicity
+ * - Clarity
+ * - Purpose
+ * - Integrity
+ * - Care
+ */
+
+:root {
+  /* Color Palette */
+  --owl-primary: #0070f3;         /* Primary brand color - a vibrant blue */
+  --owl-secondary: #6c7fa7;       /* Secondary color - a softer blue-gray */
+  --owl-accent: #16c782;          /* Accent color - success/positive action */
+  --owl-warning: #ffaa00;         /* Warning color */
+  --owl-error: #ff5555;           /* Error color */
+  
+  /* Neutral Colors */
+  --owl-background: #ffffff;      /* Background - pure white */
+  --owl-surface: #f7f9fc;         /* Surface - subtle light blue tint */
+  --owl-border: #e1e5ed;          /* Border - light gray with slight blue tint */
+  
+  /* Text Colors */
+  --owl-text-primary: #1a2234;    /* Primary text - near black with blue tint */
+  --owl-text-secondary: #545d70;  /* Secondary text - dark gray with blue tint */
+  --owl-text-tertiary: #8e98a8;   /* Tertiary text - medium gray with blue tint */
+  --owl-text-on-dark: #ffffff;    /* Text on dark backgrounds */
+  
+  /* Elevation */
+  --owl-shadow-sm: 0 1px 3px rgba(16, 42, 67, 0.1);
+  --owl-shadow-md: 0 4px 8px rgba(16, 42, 67, 0.08), 0 1px 2px rgba(16, 42, 67, 0.04);
+  --owl-shadow-lg: 0 8px 16px rgba(16, 42, 67, 0.08), 0 2px 4px rgba(16, 42, 67, 0.04);
+  
+  /* Spacing */
+  --owl-spacing-xs: 4px;
+  --owl-spacing-sm: 8px;
+  --owl-spacing-md: 16px;
+  --owl-spacing-lg: 24px;
+  --owl-spacing-xl: 32px;
+  --owl-spacing-2xl: 48px;
+  --owl-spacing-3xl: 64px;
+  
+  /* Typography */
+  --owl-font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --owl-font-family-mono: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  
+  /* Font Sizes */
+  --owl-font-size-xs: 12px;
+  --owl-font-size-sm: 14px;
+  --owl-font-size-md: 16px;
+  --owl-font-size-lg: 18px;
+  --owl-font-size-xl: 20px;
+  --owl-font-size-2xl: 24px;
+  --owl-font-size-3xl: 30px;
+  --owl-font-size-4xl: 36px;
+  
+  /* Font Weights */
+  --owl-font-weight-normal: 400;
+  --owl-font-weight-medium: 500;
+  --owl-font-weight-semibold: 600;
+  --owl-font-weight-bold: 700;
+  
+  /* Line Heights */
+  --owl-line-height-tight: 1.2;
+  --owl-line-height-normal: 1.5;
+  --owl-line-height-relaxed: 1.75;
+  
+  /* Border Radius */
+  --owl-radius-sm: 4px;
+  --owl-radius-md: 8px;
+  --owl-radius-lg: 12px;
+  --owl-radius-xl: 16px;
+  --owl-radius-full: 9999px;
+  
+  /* Transitions */
+  --owl-transition-fast: 150ms ease;
+  --owl-transition-normal: 250ms ease;
+  --owl-transition-slow: 350ms ease;
+  
+  /* Z-Index */
+  --owl-z-index-dropdown: 1000;
+  --owl-z-index-sticky: 1100;
+  --owl-z-index-fixed: 1200;
+  --owl-z-index-modal-backdrop: 1300;
+  --owl-z-index-modal: 1400;
+  --owl-z-index-popover: 1500;
+  --owl-z-index-tooltip: 1600;
+  
+  /* Container Width */
+  --owl-container-sm: 640px;
+  --owl-container-md: 768px;
+  --owl-container-lg: 1024px;
+  --owl-container-xl: 1280px;
+}

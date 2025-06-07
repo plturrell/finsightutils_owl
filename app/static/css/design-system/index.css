@@ -1,0 +1,93 @@
+/**
+ * OWL Design System - Main Entry Point
+ * 
+ * A cohesive design system inspired by Jony Ive's principles of:
+ * - Focus on the essential
+ * - Attention to detail
+ * - Material integrity
+ * - Precision and care
+ * 
+ * This file imports all design system components for easy inclusion.
+ */
+
+/* Design System Core */
+@import './variables.css';
+@import './typography.css';
+@import './components.css';
+@import './layout.css';
+
+/* Reset and Base Styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--owl-background);
+  color: var(--owl-text-primary);
+  font-family: var(--owl-font-family-sans);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Accessibility */
+.visually-hidden:not(:focus):not(:active) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background-color: #fff;
+  }
+  
+  .owl-container {
+    max-width: none;
+  }
+}
+
+/* Animation utilities */
+.owl-fade-in {
+  animation: owl-fade-in var(--owl-transition-normal);
+}
+
+@keyframes owl-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.owl-fade-up {
+  animation: owl-fade-up var(--owl-transition-normal);
+}
+
+@keyframes owl-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

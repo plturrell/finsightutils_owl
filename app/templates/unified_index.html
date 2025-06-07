@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OWL Financial Document Processor</title>
+    <meta name="description" content="Extract financial data from PDFs and convert to OWL Turtle format">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/design-system/index.css') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', path='img/apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='img/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', path='img/favicon-16x16.png') }}">
+</head>
+<body>
+    <div class="owl-app">
+        <!-- Navigation -->
+        <nav class="owl-nav">
+            <a href="/" class="owl-nav__brand">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="owl-mr-sm">
+                    <circle cx="16" cy="16" r="15" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="10" cy="14" r="3" fill="currentColor"/>
+                    <circle cx="22" cy="14" r="3" fill="currentColor"/>
+                    <path d="M9 20C9 20 12 24 16 24C20 24 23 20 23 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                OWL
+            </a>
+            
+            <ul class="owl-nav__items">
+                <li class="owl-nav__item">
+                    <a href="/" class="owl-nav__link owl-nav__link--active">Home</a>
+                </li>
+                <li class="owl-nav__item">
+                    <a href="/documents" class="owl-nav__link">Documents</a>
+                </li>
+                <li class="owl-nav__item">
+                    <a href="/viewer" class="owl-nav__link">Viewer</a>
+                </li>
+                <li class="owl-nav__item">
+                    <a href="/api/docs" class="owl-nav__link">API</a>
+                </li>
+            </ul>
+            
+            <div class="owl-d-flex owl-align-center" style="margin-left: auto;">
+                <a href="/upload" class="owl-button owl-button--primary owl-button--sm">
+                    <span class="owl-button__icon">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8 12V4M8 4L4 8M8 4L12 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3 14H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                    Upload Document
+                </a>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <main class="owl-main">
+            <div class="owl-container">
+                <!-- Hero Section -->
+                <section class="owl-section owl-text-center owl-mb-xl">
+                    <div class="owl-section__header">
+                        <h1 class="owl-section__title">Financial Document Intelligence</h1>
+                        <p class="owl-section__description owl-m-auto">
+                            Extract, analyze, and convert financial data from documents into structured knowledge with advanced AI and semantic technologies.
+                        </p>
+                    </div>
+                    <div class="owl-d-flex owl-justify-center owl-mb-lg">
+                        <a href="/upload" class="owl-button owl-button--primary owl-mr-md">
+                            <span class="owl-button__icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M8 12V4M8 4L4 8M8 4L12 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M3 14H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            Process Document
+                        </a>
+                        <a href="/api/docs" class="owl-button owl-button--outline">
+                            <span class="owl-button__icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M7.5 7.5H8V11H8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M8 5.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            API Documentation
+                        </a>
+                    </div>
+                </section>
+                
+                <!-- Features Section -->
+                <section class="owl-section">
+                    <div class="owl-row">
+                        <!-- Feature 1 -->
+                        <div class="owl-col-12 owl-col-md-4 owl-mb-lg">
+                            <div class="owl-card owl-fade-in" style="height: 100%">
+                                <div class="owl-card__body">
+                                    <div class="owl-mb-md">
+                                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <rect width="48" height="48" rx="8" fill="var(--owl-primary)" fill-opacity="0.1"/>
+                                            <path d="M18 16H30M18 24H30M18 32H24" stroke="var(--owl-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <h3>Document Extraction</h3>
+                                    <p>Extract structured data from financial PDFs including tables, charts, and key metrics with state-of-the-art machine learning.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Feature 2 -->
+                        <div class="owl-col-12 owl-col-md-4 owl-mb-lg">
+                            <div class="owl-card owl-fade-in" style="height: 100%; animation-delay: 100ms;">
+                                <div class="owl-card__body">
+                                    <div class="owl-mb-md">
+                                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <rect width="48" height="48" rx="8" fill="var(--owl-primary)" fill-opacity="0.1"/>
+                                            <path d="M24 32V16M24 16L18 22M24 16L30 22" stroke="var(--owl-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <circle cx="24" cy="32" r="2" fill="var(--owl-primary)"/>
+                                            <circle cx="18" cy="22" r="2" fill="var(--owl-primary)"/>
+                                            <circle cx="30" cy="22" r="2" fill="var(--owl-primary)"/>
+                                        </svg>
+                                    </div>
+                                    <h3>Semantic Knowledge</h3>
+                                    <p>Convert extracted data into OWL ontologies and knowledge graphs for semantic querying, reasoning, and integration.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Feature 3 -->
+                        <div class="owl-col-12 owl-col-md-4 owl-mb-lg">
+                            <div class="owl-card owl-fade-in" style="height: 100%; animation-delay: 200ms;">
+                                <div class="owl-card__body">
+                                    <div class="owl-mb-md">
+                                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <rect width="48" height="48" rx="8" fill="var(--owl-primary)" fill-opacity="0.1"/>
+                                            <path d="M32 24C32 28.4183 28.4183 32 24 32C19.5817 32 16 28.4183 16 24C16 19.5817 19.5817 16 24 16" stroke="var(--owl-primary)" stroke-width="2" stroke-linecap="round"/>
+                                            <path d="M29 19L31 17M31 17L33 19M31 17V21" stroke="var(--owl-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <h3>Financial Analysis</h3>
+                                    <p>Perform advanced financial analysis with interpretable AI models that provide clear explanations of key insights and predictions.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Advanced Features -->
+                <section class="owl-section">
+                    <div class="owl-section__header">
+                        <h2 class="owl-section__title">Advanced Capabilities</h2>
+                        <p class="owl-section__description">
+                            OWL leverages cutting-edge Google Research tools to provide powerful features for financial document processing.
+                        </p>
+                    </div>
+                    
+                    <div class="owl-card owl-mb-lg">
+                        <div class="owl-card__body">
+                            <div class="owl-row">
+                                <div class="owl-col-12 owl-col-md-6">
+                                    <h3>Chart Data Extraction</h3>
+                                    <p>Extract structured data tables from charts and graphs in financial reports using DePlot technology.</p>
+                                    <p class="owl-mb-xs"><span class="owl-badge owl-badge--primary">DePlot</span></p>
+                                    <p><a href="/deplot-demo" class="owl-button owl-button--text">Try Demo</a></p>
+                                </div>
+                                <div class="owl-col-12 owl-col-md-6">
+                                    <h3>Interpretable Predictions</h3>
+                                    <p>Make financial predictions with transparent, feature-level explanations using Neural Additive Models.</p>
+                                    <p class="owl-mb-xs"><span class="owl-badge owl-badge--primary">NAM</span></p>
+                                    <p><a href="/nam-demo" class="owl-button owl-button--text">Try Demo</a></p>
+                                </div>
+                            </div>
+                            
+                            <hr class="owl-my-lg" style="border: 0; border-top: 1px solid var(--owl-border);">
+                            
+                            <div class="owl-row">
+                                <div class="owl-col-12 owl-col-md-6">
+                                    <h3>Document Value Analysis</h3>
+                                    <p>Identify which documents contain the most valuable financial information using data valuation techniques.</p>
+                                    <p class="owl-mb-xs"><span class="owl-badge owl-badge--primary">DVRL</span></p>
+                                    <p><a href="/dvrl-demo" class="owl-button owl-button--text">Try Demo</a></p>
+                                </div>
+                                <div class="owl-col-12 owl-col-md-6">
+                                    <h3>Optimized Model Training</h3>
+                                    <p>Automatically optimize machine learning models for financial data with proven hyperparameter configurations.</p>
+                                    <p class="owl-mb-xs"><span class="owl-badge owl-badge--primary">Opt_list</span></p>
+                                    <p><a href="/optlist-demo" class="owl-button owl-button--text">Try Demo</a></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Recent Documents -->
+                <section class="owl-section">
+                    <div class="owl-d-flex owl-justify-between owl-align-center owl-mb-lg">
+                        <h2>Recent Documents</h2>
+                        <a href="/documents" class="owl-button owl-button--outline owl-button--sm">View All</a>
+                    </div>
+                    
+                    <div class="owl-table-responsive">
+                        <table class="owl-table">
+                            <thead>
+                                <tr>
+                                    <th>Document Name</th>
+                                    <th>Date Processed</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- This would be populated dynamically in a real implementation -->
+                                {% for task in recent_tasks %}
+                                <tr>
+                                    <td>{{ task.filename }}</td>
+                                    <td>{{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        {% if task.status == "completed" %}
+                                        <span class="owl-badge owl-badge--accent">Completed</span>
+                                        {% elif task.status == "failed" %}
+                                        <span class="owl-badge owl-badge--error">Failed</span>
+                                        {% elif task.status == "processing" %}
+                                        <span class="owl-badge owl-badge--warning">Processing</span>
+                                        {% else %}
+                                        <span class="owl-badge owl-badge--secondary">{{ task.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="owl-d-flex">
+                                            {% if task.status == "completed" %}
+                                            <a href="/viewer/{{ task.task_id }}" class="owl-button owl-button--text owl-button--sm">View</a>
+                                            <a href="/api/v1/result/{{ task.task_id }}?format=json" class="owl-button owl-button--text owl-button--sm">Download</a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                
+                                <!-- Placeholder content when no tasks are available -->
+                                {% if not recent_tasks %}
+                                <tr>
+                                    <td colspan="4" class="owl-text-center owl-p-lg">
+                                        <p class="owl-text-muted">No documents have been processed yet.</p>
+                                        <a href="/upload" class="owl-button owl-button--primary owl-button--sm">Upload Your First Document</a>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+        
+        <!-- Footer -->
+        <footer class="owl-footer">
+            <div class="owl-container">
+                <div class="owl-row">
+                    <div class="owl-col-12 owl-col-md-4">
+                        <h4>OWL Financial Document Processor</h4>
+                        <p>Extract, analyze, and convert financial data from documents into structured knowledge with advanced AI and semantic technologies.</p>
+                    </div>
+                    <div class="owl-col-6 owl-col-md-2">
+                        <h5>Documentation</h5>
+                        <ul class="owl-p-0" style="list-style: none;">
+                            <li class="owl-mb-xs"><a href="/api/docs">API Docs</a></li>
+                            <li class="owl-mb-xs"><a href="/docs/user-guide">User Guide</a></li>
+                            <li class="owl-mb-xs"><a href="/docs/tutorials">Tutorials</a></li>
+                        </ul>
+                    </div>
+                    <div class="owl-col-6 owl-col-md-2">
+                        <h5>Resources</h5>
+                        <ul class="owl-p-0" style="list-style: none;">
+                            <li class="owl-mb-xs"><a href="/resources/examples">Examples</a></li>
+                            <li class="owl-mb-xs"><a href="/resources/templates">Templates</a></li>
+                            <li class="owl-mb-xs"><a href="/resources/faq">FAQ</a></li>
+                        </ul>
+                    </div>
+                    <div class="owl-col-12 owl-col-md-4">
+                        <h5>Advanced Tools</h5>
+                        <div class="owl-d-flex owl-flex-wrap">
+                            <a href="/deplot-demo" class="owl-button owl-button--outline owl-button--sm owl-mr-xs owl-mb-xs">DePlot</a>
+                            <a href="/nam-demo" class="owl-button owl-button--outline owl-button--sm owl-mr-xs owl-mb-xs">NAM</a>
+                            <a href="/dvrl-demo" class="owl-button owl-button--outline owl-button--sm owl-mr-xs owl-mb-xs">DVRL</a>
+                            <a href="/optlist-demo" class="owl-button owl-button--outline owl-button--sm owl-mb-xs">Opt_list</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="owl-d-flex owl-justify-between owl-align-center owl-mt-lg owl-pt-lg" style="border-top: 1px solid var(--owl-border)">
+                    <p class="owl-text-muted owl-mb-0">© 2025 OWL Financial Document Processor</p>
+                    <div>
+                        <a href="/privacy" class="owl-mr-md">Privacy Policy</a>
+                        <a href="/terms">Terms of Service</a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+    
+    <script>
+        // Simple client-side JavaScript for interactions
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('OWL Financial Document Processor initialized');
+            
+            // Add any client-side functionality here
+        });
+    </script>
+</body>
+</html>
