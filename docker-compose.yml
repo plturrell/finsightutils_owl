@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # FastAPI application
+  api:
+    image: python:3.10-slim
+    container_name: owl-api
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=false
+      - BASE_URI=http://finsight.dev/kg/
+      - INCLUDE_PROVENANCE=true
+    volumes:
+      - ./app:/app
+    restart: unless-stopped
+    command: >
+      bash -c "
+        apt-get update && 
+        apt-get install -y --no-install-recommends build-essential gcc && 
+        pip install --no-cache-dir -r requirements.txt &&
+        python main.py --host 0.0.0.0 --port 8000
+      "
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    container_name: owl-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deployment/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
