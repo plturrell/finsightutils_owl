@@ -17,7 +17,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 CONFIG_DIR="$PROJECT_ROOT/config"
 DOCKER_DIR="$CONFIG_DIR/docker"
-COMPOSE_FILE="$DOCKER_DIR/docker-compose.t4-optimized.yml"
+COMPOSE_FILE="$DOCKER_DIR/docker-compose.t4-standalone.yml"
 
 # Parse command line arguments
 BUILD=true

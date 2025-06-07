@@ -1,0 +1,163 @@
+version: '3.8'
+
+# T4-Optimized Docker Compose configuration for OWL
+# Specialized for NVIDIA T4 GPUs with tensor core optimizations
+# Standalone version with all services included (no extends)
+
+services:
+  # FastAPI application with T4 optimization
+  api:
+    build:
+      context: ../..
+      dockerfile: config/docker/dockerfiles/Dockerfile.t4-optimized
+    image: finsight/owl-api:t4-optimized
+    container_name: owl-api
+    ports:
+      - "8000:8000"
+    environment:
+      - LAYOUT_MODEL_URL=triton:8000/v2/models/nv-layoutlm-financial
+      - TABLE_MODEL_URL=triton:8000/v2/models/nv-table-extraction
+      - NER_MODEL_URL=triton:8000/v2/models/nv-financial-ner
+      - USE_GPU=true
+      - ENABLE_T4_OPTIMIZATION=true
+      - USE_TF32=true
+      - NVIDIA_TF32_OVERRIDE=1
+      - CUDNN_TENSOR_OP_MATH=1
+      - BASE_URI=http://finsight.dev/kg/
+      - INCLUDE_PROVENANCE=true
+    volumes:
+      - ../../data:/app/data
+    depends_on:
+      - triton
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - owl-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ['0']
+              count: 1
+              
+  # SAP OWL Converter Service with T4 optimization
+  owl-converter:
+    build:
+      context: ../..
+      dockerfile: config/docker/dockerfiles/Dockerfile.t4-optimized
+    image: finsight/owl-converter:t4-optimized
+    container_name: owl-converter
+    ports:
+      - "8004:8000"
+    environment:
+      - BASE_URI=http://finsight.dev/ontology/sap/
+      - INFERENCE_LEVEL=standard
+      - OUTPUT_DIR=/app/results
+      - ENABLE_T4_OPTIMIZATION=true
+      - USE_TF32=true
+    volumes:
+      - owl_results:/app/results
+    restart: unless-stopped
+    networks:
+      - owl-network
+
+  # Triton Inference Server with T4 optimization
+  triton:
+    image: nvcr.io/nvidia/tritonserver:23.10-py3
+    container_name: owl-triton
+    ports:
+      - "8001:8000"
+      - "8002:8001"
+      - "8003:8002"
+    environment:
+      - LD_LIBRARY_PATH=/opt/tritonserver/lib
+      - NVIDIA_TF32_OVERRIDE=1
+    volumes:
+      - ../../nvidia_triton/model_repository:/models
+      - ../scripts/t4_optimize.sh:/opt/tritonserver/t4_optimize.sh
+    command: [
+      "/bin/bash", "-c",
+      "/opt/tritonserver/t4_optimize.sh && tritonserver --model-repository=/models --strict-model-config=false --log-verbose=1"
+    ]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - owl-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ['0']
+              count: 1
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:v2.43.0
+    container_name: owl-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+    networks:
+      - owl-network
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:9.5.1
+    container_name: owl-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning
+      - ../grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - owl-network
+
+  # NVIDIA DCGM Exporter for GPU metrics
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    container_name: owl-dcgm-exporter
+    ports:
+      - "9400:9400"
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+    networks:
+      - owl-network
+
+volumes:
+  owl_results:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  owl-network:
+    driver: bridge
