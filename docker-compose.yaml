@@ -1,31 +1,95 @@
 version: '3.8'
 
-# Simple Docker Compose for OWL service using pre-built images
+# OWL Multi-GPU Docker Compose Configuration
+# For Financial Document Processing
 
 services:
-  # Main web service
-  web:
-    image: nginx:alpine
+  # API Service
+  api-service:
+    image: anthropic/claude-code:latest
+    container_name: owl-api
+    environment:
+      - PORT=8000
+      - ENABLE_MULTI_GPU=true
+      - LOG_LEVEL=info
+      - PYTHONPATH=/app
     ports:
-      - "8020:80"
-      - "8021:80"
-      - "9090:80"
+      - "8020:8000"
     volumes:
-      - ./html:/usr/share/nginx/html
-    restart: unless-stopped
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: >
+      sh -c "python -m src.aiq.owl.api.app"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-  
-  # Grafana dashboard
+    restart: unless-stopped
+
+  # Management Service
+  management-service:
+    image: anthropic/claude-code:latest
+    container_name: owl-management
+    environment:
+      - PORT=8001
+      - PYTHONPATH=/app
+      - LOG_LEVEL=info
+    ports:
+      - "8021:8001"
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: >
+      sh -c "python -m src.aiq.owl.api.management"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Metrics Service
+  metrics-service:
+    image: anthropic/claude-code:latest
+    container_name: owl-metrics
+    environment:
+      - PORT=9090
+      - PYTHONPATH=/app
+      - LOG_LEVEL=info
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: >
+      sh -c "python -m src.aiq.owl.api.metrics"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Grafana for dashboards
   grafana:
     image: grafana/grafana:latest
+    container_name: owl-grafana
     ports:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
       - GF_AUTH_ANONYMOUS_ENABLED=true
+    volumes:
+      - grafana_data:/var/lib/grafana
     restart: unless-stopped
+
+volumes:
+  grafana_data:
