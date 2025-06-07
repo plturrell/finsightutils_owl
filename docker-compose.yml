@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  # FastAPI application
+  # FastAPI application with NVIDIA GPU support
   api:
-    image: python:3.10-slim
+    image: brevdev/brev-python:3.10-cuda-11.8
     container_name: owl-api
     working_dir: /app
     ports:
@@ -12,13 +12,19 @@ services:
       - DEBUG=false
       - BASE_URI=http://finsight.dev/kg/
       - INCLUDE_PROVENANCE=true
+      - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - ./app:/app
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     command: >
       bash -c "
-        apt-get update && 
-        apt-get install -y --no-install-recommends build-essential gcc && 
         pip install --no-cache-dir -r requirements.txt &&
         python main.py --host 0.0.0.0 --port 8000
       "
