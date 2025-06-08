@@ -4,7 +4,7 @@ This blueprint provides a production-ready Docker Compose configuration for depl
 
 ## Overview
 
-The OWL Converter transforms data into Web Ontology Language (OWL) representations, leveraging NVIDIA GPU acceleration for improved performance in processing large enterprise data.
+The OWL Converter transforms SAP HANA database schemas into Web Ontology Language (OWL) representations, leveraging NVIDIA GPU acceleration for improved performance in processing large enterprise data. It includes integration with the SAP HANA Knowledge Engine for storing and querying the generated ontologies.
 
 ## Features
 
@@ -13,6 +13,9 @@ The OWL Converter transforms data into Web Ontology Language (OWL) representatio
 - **Comprehensive Monitoring**: Prometheus, Grafana, and DCGM Exporter for detailed metrics
 - **Security-Focused**: NGINX with SSL termination, rate limiting, and security headers
 - **Production-Ready**: Designed for reliability with health checks, restart policies, and proper resource allocation
+- **SAP HANA Integration**: Connects to SAP HANA databases to extract and convert schema information
+- **Knowledge Engine**: Stores ontologies in the SAP HANA Knowledge Engine for semantic querying
+- **SPARQL Endpoint**: Exposes a SPARQL endpoint for querying the knowledge graphs
 
 ## Prerequisites
 
