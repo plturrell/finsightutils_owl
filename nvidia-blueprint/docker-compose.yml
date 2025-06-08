@@ -1,0 +1,236 @@
+version: '3.8'
+
+services:
+  # Main API service
+  api:
+    build:
+      context: ..
+      dockerfile: nvidia-blueprint/Dockerfile.api
+    container_name: owl-api
+    restart: unless-stopped
+    environment:
+      # API configuration
+      - ENVIRONMENT=production
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MAX_UPLOAD_SIZE=104857600  # 100MB
+      - REDIS_URL=redis://redis:6379/0
+      - BASE_URI=http://localhost:8000/
+      - INCLUDE_PROVENANCE=true
+      - CACHE_DIR=/app/cache
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - CORS_ORIGINS=*
+      # GPU configuration
+      - USE_GPU=true
+      - GPU_DEVICE_ID=0
+      - GPU_MEMORY_LIMIT=0  # 0 means no limit
+      # T4 GPU optimizations
+      - TF32_OVERRIDE=1
+      - NVIDIA_TF32_OVERRIDE=1
+      - DOCUMENT_BATCH_SIZE=16
+      - NER_BATCH_SIZE=32
+      - INFERENCE_BATCH_SIZE=64
+      - GPU_MEMORY_FRACTION=0.8
+      - CUDA_LAUNCH_BLOCKING=0
+      - CUDA_MODULE_LOADING=LAZY
+      - CUDNN_BENCHMARK=true
+      - ENABLE_AMP=true
+    volumes:
+      - owl_uploads:/app/uploads
+      - owl_results:/app/results
+      - owl_cache:/app/cache
+      - owl_logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    networks:
+      - owl-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Worker service for document processing
+  worker:
+    build:
+      context: ..
+      dockerfile: nvidia-blueprint/Dockerfile.api
+    container_name: owl-worker
+    restart: unless-stopped
+    command: python -m app.worker
+    environment:
+      # Worker configuration
+      - ENVIRONMENT=production
+      - WORKER_CONCURRENCY=2
+      - WORKER_MAX_TASKS_PER_CHILD=100
+      - REDIS_URL=redis://redis:6379/0
+      # GPU configuration
+      - USE_GPU=true
+      - GPU_DEVICE_ID=0
+      - GPU_MEMORY_LIMIT=0  # 0 means no limit
+      # T4 GPU optimizations
+      - TF32_OVERRIDE=1
+      - NVIDIA_TF32_OVERRIDE=1
+      - DOCUMENT_BATCH_SIZE=16
+      - NER_BATCH_SIZE=32
+      - INFERENCE_BATCH_SIZE=64
+      - GPU_MEMORY_FRACTION=0.8
+      - CUDA_LAUNCH_BLOCKING=0
+      - CUDA_MODULE_LOADING=LAZY
+      - CUDNN_BENCHMARK=true
+      - ENABLE_AMP=true
+    volumes:
+      - owl_uploads:/app/uploads
+      - owl_results:/app/results
+      - owl_cache:/app/cache
+      - owl_logs:/app/logs
+    depends_on:
+      - redis
+      - api
+    networks:
+      - owl-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Redis for task queue and caching
+  redis:
+    image: redis:7-alpine
+    container_name: owl-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-owl_secure_password}
+    volumes:
+      - owl_redis:/data
+    networks:
+      - owl-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-owl_secure_password}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # NGINX for SSL termination and static file serving
+  nginx:
+    image: nginx:alpine
+    container_name: owl-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./ssl:/etc/nginx/ssl
+      - owl_logs:/var/log/nginx
+    depends_on:
+      - api
+    networks:
+      - owl-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: owl-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - owl_prometheus:/prometheus
+    networks:
+      - owl-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:10.0.3
+    container_name: owl-grafana
+    restart: unless-stopped
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - owl_grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-owl_secure_password}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - owl-network
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # NVIDIA DCGM Exporter for GPU metrics
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.1.7-3.1.4-ubuntu20.04
+    container_name: owl-dcgm-exporter
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "9400:9400"
+    environment:
+      - DCGM_EXPORTER_COLLECTORS=dcp,health,nvswitch,nvlink,topo
+      - DCGM_EXPORTER_INTERVAL=1000
+      - DCGM_EXPORTER_FIELDS=2091,2092,2093,2094,2095,2096,2097,2098,2099  # Memory usage fields
+      - DCGM_EXPORTER_KUBERNETES=false
+      - DCGM_EXPORTER_GATHER_METRICS=true
+      - DCGM_EXPORTER_ENABLE_LOGGING=true
+      - DCGM_EXPORTER_LOGLEVEL=INFO
+    networks:
+      - owl-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9400/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  owl_uploads:
+  owl_results:
+  owl_cache:
+  owl_logs:
+  owl_redis:
+  owl_prometheus:
+  owl_grafana:
+
+networks:
+  owl-network:
+    driver: bridge

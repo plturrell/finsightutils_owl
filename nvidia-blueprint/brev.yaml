@@ -1,0 +1,117 @@
+# OWL Converter - Brev.yaml configuration for NVIDIA LaunchPad
+version: v0
+
+blueprint:
+  name: "OWL Converter"
+  description: "SAP HANA to OWL Ontology Converter with NVIDIA GPU Acceleration"
+  author: "FinSight Dev Team"
+  tags:
+    - "owl"
+    - "converter"
+    - "nvidia"
+    - "gpu"
+    - "ontology"
+    - "knowledge-graph"
+  
+# Hardware requirements
+instance:
+  gpu: "T4"
+  vcpu: 4
+  memory: 16 # GB
+  disk: 50  # GB
+  
+# Commands to run when the instance starts
+setup:
+  startup_script: |
+    #!/bin/bash
+    set -e
+    
+    echo "Starting OWL Converter setup..."
+    
+    # Check for GPU availability
+    nvidia-smi
+    
+    # Navigate to the blueprint directory
+    cd /home/ubuntu/OWL/nvidia-blueprint
+    
+    # Create the SSL directory if it doesn't exist
+    mkdir -p ssl
+    
+    # Generate self-signed certificates if they don't exist
+    if [ ! -f ssl/server.crt ] || [ ! -f ssl/server.key ]; then
+      echo "Generating self-signed SSL certificates..."
+      openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout ssl/server.key -out ssl/server.crt \
+        -subj "/C=US/ST=State/L=City/O=FinSight/CN=example.com"
+    fi
+    
+    # Create a default .env file if it doesn't exist
+    if [ ! -f .env ]; then
+      echo "Creating default .env file..."
+      cat > .env << EOL
+    # API Configuration
+    ENVIRONMENT=production
+    API_HOST=0.0.0.0
+    API_PORT=8000
+    MAX_UPLOAD_SIZE=104857600
+    BASE_URI=http://localhost:8000/
+    INCLUDE_PROVENANCE=true
+    LOG_LEVEL=INFO
+    LOG_FORMAT=json
+    CORS_ORIGINS=*
+
+    # Redis Configuration
+    REDIS_PASSWORD=brev_secure_password
+
+    # GPU Configuration
+    USE_GPU=true
+    GPU_DEVICE_ID=0
+    GPU_MEMORY_LIMIT=0
+
+    # Security
+    SECRET_KEY=brev_secure_key
+
+    # Monitoring
+    GRAFANA_USER=admin
+    GRAFANA_PASSWORD=brev_admin_password
+    EOL
+    fi
+    
+    # Start the services
+    echo "Starting OWL Converter services..."
+    docker-compose up -d
+    
+    # Wait for services to be ready
+    echo "Waiting for services to be ready..."
+    sleep 30
+    
+    # Check if services are running
+    docker-compose ps
+    
+    echo "OWL Converter setup complete!"
+
+# Exposed ports for the services
+ports:
+  - 8000 # API
+  - 3000 # Grafana
+  - 9090 # Prometheus
+
+# Environment variables to be set
+env:
+  - key: "TF32_OVERRIDE"
+    value: "1"
+  - key: "NVIDIA_TF32_OVERRIDE"
+    value: "1"
+  - key: "CUDA_MODULE_LOADING"
+    value: "LAZY"
+
+# Workspace configuration
+workspace:
+  packages:
+    - docker-compose
+    - nvidia-docker2
+    - curl
+    - jq
+  
+  post_create_commands:
+    - echo "OWL Converter setup complete! Access the API at http://localhost:8000/api/docs"

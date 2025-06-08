@@ -1,0 +1,64 @@
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04 AS base
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH="/app" \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install Python and system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    libpq-dev \
+    curl \
+    libssl-dev \
+    gcc \
+    git \
+    openssh-client \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g appuser -s /bin/bash -m appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt /app/
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt
+
+# Create necessary directories
+RUN mkdir -p /app/uploads /app/results /app/cache /app/logs /app/static /app/templates && \
+    chown -R appuser:appuser /app
+
+# Copy application code
+COPY app/ /app/
+COPY src/ /app/src/
+COPY static/ /app/static/
+COPY templates/ /app/templates/
+
+# Set ownership for all files
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Set entrypoint
+ENTRYPOINT ["python3", "-m", "uvicorn", "app.main:app"]
+
+# Default command
+CMD ["--host", "0.0.0.0", "--port", "8000"]
