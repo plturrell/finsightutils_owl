@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # Main API service
+  api:
+    build:
+      context: ..
+      dockerfile: local-docker/Dockerfile
+    container_name: owl-api
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - MAX_UPLOAD_SIZE=10485760  # 10MB
+      - REDIS_URL=redis://redis:6379/0
+      - USE_GPU=false  # Set to true to use GPU if available
+      - BASE_URI=http://localhost:8000/
+      - INCLUDE_PROVENANCE=true
+      - SECRET_KEY=developerTestingKey123!
+    volumes:
+      - ../app:/app/app
+      - ../src:/app/src
+      - ../static:/app/static
+      - ../templates:/app/templates
+      - owl_uploads:/app/uploads
+      - owl_results:/app/results
+      - owl_cache:/app/cache
+      - owl_logs:/app/logs
+    ports:
+      - "8080:8000"
+    depends_on:
+      - redis
+    networks:
+      - owl-network
+
+  # Redis for task queue and caching
+  redis:
+    image: redis:6-alpine
+    container_name: owl-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - owl_redis:/data
+    networks:
+      - owl-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  owl_uploads:
+  owl_results:
+  owl_cache:
+  owl_logs:
+  owl_redis:
+
+networks:
+  owl-network:
+    driver: bridge
