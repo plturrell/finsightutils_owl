@@ -42,11 +42,21 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 
 ### 3. Configure Environment Variables
 
-Create a `.env` file with appropriate values:
+Create a `.env` file with appropriate values. A template has been provided but is gitignored for security reasons.
+
+Important security note:
+- The `.env` file contains sensitive credentials and is excluded from version control
+- For production deployment, use strong, randomly generated passwords
+- You can generate secure random passwords with the following command:
 
 ```bash
-# Create .env file
-cat > .env << EOL
+# Generate secure random passwords
+openssl rand -base64 32  # For Redis, Secret Key, and Grafana passwords
+```
+
+Example of required environment variables:
+
+```bash
 # API Configuration
 ENVIRONMENT=production
 API_HOST=0.0.0.0
@@ -58,8 +68,14 @@ LOG_LEVEL=INFO
 LOG_FORMAT=json
 CORS_ORIGINS=*
 
+# SAP HANA Connection (replace with your actual credentials)
+SAP_HANA_HOST=your-sap-instance.hana.cloud.ondemand.com
+SAP_HANA_PORT=443
+SAP_HANA_USER=YOUR_USERNAME
+SAP_HANA_PASSWORD=YOUR_PASSWORD
+
 # Redis Configuration
-REDIS_PASSWORD=your_secure_password_here
+REDIS_PASSWORD=<generated-secure-password>
 
 # GPU Configuration
 USE_GPU=true
@@ -67,12 +83,11 @@ GPU_DEVICE_ID=0
 GPU_MEMORY_LIMIT=0
 
 # Security
-SECRET_KEY=your_secure_key_here
+SECRET_KEY=<generated-secure-key>
 
 # Monitoring
 GRAFANA_USER=admin
-GRAFANA_PASSWORD=your_secure_password_here
-EOL
+GRAFANA_PASSWORD=<generated-secure-password>
 ```
 
 ### 4. Deploy the Stack
